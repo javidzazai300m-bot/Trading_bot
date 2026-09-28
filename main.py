@@ -3,11 +3,9 @@ import requests
 import yfinance as yf
 import pandas as pd
 
-# Telegram Zugangsdaten aus GitHub Secrets auslesen
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Liste der Symbole: Gold, Bitcoin, Ethereum
 SYMBOLS = {
     "Gold (XAU/USD)": "GC=F",
     "Bitcoin (BTC)": "BTC-USD",
@@ -22,7 +20,7 @@ def send_telegram_message(message):
     print("Telegram Response Text:", response.text)
 
 def calculate_rsi(data, window=14):
-    delta = data['Close'].diff()
+    delta = data.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
     rs = gain / loss
@@ -33,30 +31,31 @@ def analyze_market():
     
     for name, ticker in SYMBOLS.items():
         try:
-            # Daten abrufen (Stunden-Intervall)
             df = yf.download(ticker, period="7d", interval="1h", progress=False)
             if df.empty:
                 print(f"Keine Daten für {ticker}")
                 continue
                 
-            # Falls yfinance MultiIndex Spalten liefert
+            # Schlusskurse als Pandas Series extrahieren
             if isinstance(df.columns, pd.MultiIndex):
-                df = df['Close'].to_frame(name='Close')
+                close_prices = df['Close'][ticker]
+            else:
+                close_prices = df['Close']
             
-            # Technische Indikatoren berechnen
-            df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
-            df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
-            df['RSI'] = calculate_rsi(df)
+            close_prices = close_prices.dropna()
 
-            current_price = float(df['Close'].iloc[-1])
-            prev_price = float(df['Close'].iloc[-2])
+            ema20_series = close_prices.ewm(span=20, adjust=False).mean()
+            ema50_series = close_prices.ewm(span=50, adjust=False).mean()
+            rsi_series = calculate_rsi(close_prices)
+
+            current_price = float(close_prices.iloc[-1])
+            prev_price = float(close_prices.iloc[-2])
             percent_change = ((current_price - prev_price) / prev_price) * 100
 
-            ema20 = float(df['EMA_20'].iloc[-1])
-            ema50 = float(df['EMA_50'].iloc[-1])
-            rsi = float(df['RSI'].iloc[-1])
+            ema20 = float(ema20_series.iloc[-1])
+            ema50 = float(ema50_series.iloc[-1])
+            rsi = float(rsi_series.iloc[-1])
 
-            # Signal-Logik
             if current_price > ema20 and ema20 > ema50 and rsi > 50:
                 signal = "🟢 BULLISH SIGNAL (KAUFEN)"
                 recommendation = "Aufwärtstrend! Kauf / Long im Blick behalten."
