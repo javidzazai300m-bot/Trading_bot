@@ -1,85 +1,81 @@
-import os
 import requests
 import yfinance as yf
-import pandas as pd
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+# ---------------------------------------------------------
+# CONFGURATION
+# ---------------------------------------------------------
+TELEGRAM_TOKEN = "8637164092:AAEdyXVptDB7c5AtDkxyiMMnT_0WV049qjw"
+CHAT_ID = "6551623158"
 
+# Liste der Symbole (z.B. BTC-USD, GC=F für Gold, ETH-USD)
 SYMBOLS = {
-    "Gold (XAU/USD)": "GC=F",
     "Bitcoin (BTC)": "BTC-USD",
-    "Ethereum (ETH)": "ETH-USD"
+    "Gold (XAU/USD)": "GC=F"
 }
 
-def send_telegram_message(message):
+def send_telegram_message(message: str):
+    """Sendet eine Nachricht an den Telegram-Bot."""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
-    response = requests.post(url, data=payload)
-    print("Telegram Response Status:", response.status_code)
-    print("Telegram Response Text:", response.text)
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    try:
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+        print("Nachricht erfolgreich gesendet!")
+    except Exception as e:
+        print(f"Fehler beim Senden: {e}")
 
-def calculate_rsi(data, window=14):
-    delta = data.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
-
-def analyze_market():
-    messages = ["📊 MARKT-ANALYSEN & SIGNALE 📊\n"]
+def analyze_market(symbol_ticker: str, symbol_name: str) -> str:
+    """Holt Marktdaten und berechnet Bullish / Bearish Zonen."""
+    ticker = yf.Ticker(symbol_ticker)
+    df = ticker.history(period="5d", interval="1h")
     
+    if df.empty:
+        return f"⚠️ Keine Daten für {symbol_name} gefunden."
+    
+    current_price = df['Close'].iloc[-1]
+    high_price = df['High'].tail(24).max()  # 24-Stunden-Hoch
+    low_price = df['Low'].tail(24).min()    # 24-Stunden-Tief
+    
+    # Beispiel-Berechnung für Zonen (1% Puffer / Breakout)
+    bullish_trigger = high_price
+    bearish_trigger = low_price
+    
+    # Preis-Reichweiten definieren
+    bullish_target = bullish_trigger * 1.02  # +2% Ziel
+    bearish_target = bearish_trigger * 0.98  # -2% Ziel
+    
+    # Trend-Einschätzung bestimmen
+    if current_price > (high_price + low_price) / 2:
+        bias = "🟢 **BULLISH TREND**"
+    else:
+        bias = "🔴 **BEARISH TREND**"
+
+    msg = (
+        f"📊 *Markt-Signal: {symbol_name}*\n"
+        f"___________________________________\n\n"
+        f"💵 **Aktueller Preis:** `{current_price:.2f}`\n"
+        f"📈 **Status:** {bias}\n\n"
+        f"🚀 **BULLISH ZONE (Kaufen):**\n"
+        f"• Einstieg ab: `{bullish_trigger:.2f}`\n"
+        f"• Von `{bullish_trigger:.2f}` bis `{bullish_target:.2f}`\n\n"
+        f"📉 **BEARISH ZONE (Verkaufen):**\n"
+        f"• Einstieg ab: `{bearish_trigger:.2f}`\n"
+        f"• Von `{bearish_trigger:.2f}` bis `{bearish_target:.2f}`\n"
+        f"___________________________________"
+    )
+    return msg
+
+def main():
+    full_report = "🤖 *AUTOMATISCHES TRADING SIGNAL*\n\n"
     for name, ticker in SYMBOLS.items():
-        try:
-            df = yf.download(ticker, period="7d", interval="1h", progress=False)
-            if df.empty:
-                print(f"Keine Daten für {ticker}")
-                continue
-                
-            # Schlusskurse als Pandas Series extrahieren
-            if isinstance(df.columns, pd.MultiIndex):
-                close_prices = df['Close'][ticker]
-            else:
-                close_prices = df['Close']
-            
-            close_prices = close_prices.dropna()
-
-            ema20_series = close_prices.ewm(span=20, adjust=False).mean()
-            ema50_series = close_prices.ewm(span=50, adjust=False).mean()
-            rsi_series = calculate_rsi(close_prices)
-
-            current_price = float(close_prices.iloc[-1])
-            prev_price = float(close_prices.iloc[-2])
-            percent_change = ((current_price - prev_price) / prev_price) * 100
-
-            ema20 = float(ema20_series.iloc[-1])
-            ema50 = float(ema50_series.iloc[-1])
-            rsi = float(rsi_series.iloc[-1])
-
-            if current_price > ema20 and ema20 > ema50 and rsi > 50:
-                signal = "🟢 BULLISH SIGNAL (KAUFEN)"
-                recommendation = "Aufwärtstrend! Kauf / Long im Blick behalten."
-            elif current_price < ema20 and ema20 < ema50 and rsi < 50:
-                signal = "🔴 BEARISH SIGNAL (VERKAUFEN)"
-                recommendation = "Abwärtstrend! Verkauf / Short im Blick behalten."
-            else:
-                signal = "⚪ NEUTRAL / SEITWÄRTS"
-                recommendation = "Abwarten auf einen Ausbruch."
-
-            msg = (
-                f"Asset: {name}\n"
-                f"Preis: ${current_price:,.2f} ({percent_change:+.2f}%)\n"
-                f"RSI: {rsi:.1f}\n"
-                f"Signal: {signal}\n"
-                f"Empfehlung: {recommendation}\n"
-                f"-----------------------------------"
-            )
-            messages.append(msg)
-        except Exception as e:
-            print(f"Fehler bei {name}: {e}")
-
-    final_message = "\n\n".join(messages)
-    send_telegram_message(final_message)
+        report = analyze_market(ticker, name)
+        full_report += report + "\n\n"
+    
+    send_telegram_message(full_report)
 
 if __name__ == "__main__":
-    analyze_market()
+    main()
