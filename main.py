@@ -2,12 +2,12 @@ import requests
 import yfinance as yf
 
 # ---------------------------------------------------------
-# CONFGURATION
+# KONFIGURATION
 # ---------------------------------------------------------
-TELEGRAM_TOKEN = "8637164092:AAEdyXVptDB7c5AtDkxyiMMnT_0WV049qjw"
+TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
 CHAT_ID = "6551623158"
 
-# Liste der Symbole (z.B. BTC-USD, GC=F für Gold, ETH-USD)
+# Aktive Handelspaare (Bitcoin & Gold)
 SYMBOLS = {
     "Bitcoin (BTC)": "BTC-USD",
     "Gold (XAU/USD)": "GC=F"
@@ -24,12 +24,12 @@ def send_telegram_message(message: str):
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status()
-        print("Nachricht erfolgreich gesendet!")
+        print("Nachricht erfolgreich an Telegram gesendet!")
     except Exception as e:
-        print(f"Fehler beim Senden: {e}")
+        print(f"Fehler beim Senden der Nachricht: {e}")
 
 def analyze_market(symbol_ticker: str, symbol_name: str) -> str:
-    """Holt Marktdaten und berechnet Bullish / Bearish Zonen."""
+    """Holt Marktdaten und berechnet Bullish- & Bearish-Zonen."""
     ticker = yf.Ticker(symbol_ticker)
     df = ticker.history(period="5d", interval="1h")
     
@@ -40,15 +40,13 @@ def analyze_market(symbol_ticker: str, symbol_name: str) -> str:
     high_price = df['High'].tail(24).max()  # 24-Stunden-Hoch
     low_price = df['Low'].tail(24).min()    # 24-Stunden-Tief
     
-    # Beispiel-Berechnung für Zonen (1% Puffer / Breakout)
+    # Preis-Reichweiten berechnen (+2% / -2% Zielzonen)
     bullish_trigger = high_price
     bearish_trigger = low_price
+    bullish_target = bullish_trigger * 1.02
+    bearish_target = bearish_trigger * 0.98
     
-    # Preis-Reichweiten definieren
-    bullish_target = bullish_trigger * 1.02  # +2% Ziel
-    bearish_target = bearish_trigger * 0.98  # -2% Ziel
-    
-    # Trend-Einschätzung bestimmen
+    # Trend-Tendenz
     if current_price > (high_price + low_price) / 2:
         bias = "🟢 **BULLISH TREND**"
     else:
