@@ -1,18 +1,14 @@
-import os
 import requests
 
 def send_telegram_signals():
-    # 1. Telegram Zugangsdaten aus den Umgebungsvariablen / GitHub Secrets laden
-    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    # Dein Telegram Bot-Token und deine Chat-ID
+    bot_token = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
+    
+    # ⚠️ WICHTIG: Ersetze die Zahl unten durch deine eigene Telegram Chat-ID!
+    # (Falls deine Chat-ID z.B. 123456789 ist, schreibe: chat_id = "123456789")
+    chat_id = "DEINE_CHAT_ID"
 
-    # Falls nicht als Umgebungsvariable gesetzt, direkt eintragen:
-    if not bot_token:
-        bot_token = "DEIN_TELEGRAM_BOT_TOKEN"
-    if not chat_id:
-        chat_id = "DEINE_CHAT_ID"
-
-    # 2. Deine Marktdaten / Signale (hier deine Werte eintragen)
+    # Deine Signaldaten
     market_signals = [
         {
             "asset_name": "Bitcoin (BTC)",
@@ -34,14 +30,11 @@ def send_telegram_signals():
         }
     ]
 
-    # 3. Nachricht im exakten Design aufbauen
+    # Formatierung im gewünschten Nachrichtendesign
     message = "🤖 **AUTOMATISCHES TRADING SIGNAL**\n\n"
 
     for signal in market_signals:
-        if signal["is_bullish"]:
-            status_text = "🟢 **BULLISH TREND**"
-        else:
-            status_text = "🔴 **BEARISH TREND**"
+        status_text = "🟢 **BULLISH TREND**" if signal["is_bullish"] else "🔴 **BEARISH TREND**"
 
         message += (
             f"📊 **Markt-Signal: {signal['asset_name']}**\n\n"
@@ -55,10 +48,9 @@ def send_telegram_signals():
             f"• Von `{signal['bearish_entry']:.2f}` bis `{signal['bearish_target']:.2f}`\n\n"
         )
 
-    # Letzten Zeilenumbruch entfernen
     message = message.strip()
 
-    # 4. An Telegram senden
+    # An Telegram senden
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -69,7 +61,6 @@ def send_telegram_signals():
     response = requests.post(url, json=payload)
     response_data = response.json()
 
-    # 5. Überprüfung im GitHub Log
     if response.status_code == 200 and response_data.get("ok"):
         print("✅ Signal erfolgreich an Telegram gesendet!")
     else:
