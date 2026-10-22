@@ -1,73 +1,74 @@
+import os
 import requests
+import yfinance as yf
 
-def send_telegram_signals():
-    # Deine echten Zugangsdaten
-    bot_token = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
-    chat_id = "6551623158"
+# Deine Zugangsdaten (sicher in deinem privaten Repo)
+TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
+TELEGRAM_CHAT_ID = "6551623158"
 
-    # Signaldaten
-    market_signals = [
-        {
-            "asset_name": "Bitcoin (BTC)",
-            "current_price": 83133.08,
-            "is_bullish": True,
-            "bullish_entry": 83310.87,
-            "bullish_target": 84977.08,
-            "bearish_entry": 81197.64,
-            "bearish_target": 79573.69
-        },
-        {
-            "asset_name": "Gold (XAU/USD)",
-            "current_price": 4139.10,
-            "is_bullish": False,
-            "bullish_entry": 4174.90,
-            "bullish_target": 4258.40,
-            "bearish_entry": 4124.00,
-            "bearish_target": 4041.52
-        }
-    ]
 
-    # Formatierung im gewünschten Nachrichtendesign
-    message = "🤖 **AUTOMATISCHES TRADING SIGNAL**\n\n"
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
+    try:
+        requests.post(url, json=payload)
+    except Exception as e:
+        print(f"Fehler beim Senden: {e}")
 
-    for signal in market_signals:
-        status_text = "🟢 **BULLISH TREND**" if signal["is_bullish"] else "🔴 **BEARISH TREND**"
 
-        message += (
-            f"📊 **Markt-Signal: {signal['asset_name']}**\n\n"
-            f"💵 **Aktueller Preis:** `{signal['current_price']:.2f}`\n"
-            f"📈 **Status:** {status_text}\n\n"
-            f"🚀 **BULLISH ZONE (Kaufen):**\n"
-            f"• Einstieg ab: `{signal['bullish_entry']:.2f}`\n"
-            f"• Von `{signal['bullish_entry']:.2f}` bis `{signal['bullish_target']:.2f}`\n\n"
-            f"📉 **BEARISH ZONE (Verkaufen):**\n"
-            f"• Einstieg ab: `{signal['bearish_entry']:.2f}`\n"
-            f"• Von `{signal['bearish_entry']:.2f}` bis `{signal['bearish_target']:.2f}`\n\n"
-        )
-
-    message = message.strip()
-
-    # An Telegram senden mit Timeout (verhindert Aufhängen)
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "Markdown"
+def check_live_markets():
+    # Zu überwachende Assets (Beispiele: Gold Futures, Bitcoin, Ethereum)
+    # Yahoo Finance Symbole: Gold = "GC=F", Bitcoin = "BTC-USD", Ethereum = "ETH-USD", XRP = "XRP-USD"
+    assets = {
+        "Gold (XAU/USD)": "GC=F",
+        "Bitcoin (BTC)": "BTC-USD",
+        "Ethereum (ETH)": "ETH-USD",
+        "XRP (XRP)": "XRP-USD",
     }
 
-    try:
-        response = requests.post(url, json=payload, timeout=10)
-        response_data = response.json()
+    message = "🤖 <b>LIVE TRADING SIGNAL UPDATE</b>\n\n"
 
-        if response.status_code == 200 and response_data.get("ok"):
-            print("✅ Signal erfolgreich an Telegram gesendet!")
-        else:
-            print("❌ Fehler beim Senden an Telegram:")
-            print(response_data)
-            raise Exception(f"Telegram API Fehler: {response_data}")
-    except requests.exceptions.Timeout:
-        print("❌ Fehler: Zeitüberschreitung (Timeout) bei der Verbindung zu Telegram.")
-        raise
+    for name, ticker_symbol in assets.items():
+        try:
+            ticker = yf.Ticker(ticker_symbol)
+            df = ticker.history(period="5d", interval="1h")
+
+            if df.empty:
+                continue
+
+            current_price = df["Close"].iloc[-1]
+            prev_price = df["Close"].iloc[-2]
+
+            # Einfache Trend-Logik (Vergleich zum vorherigen Stundenkerzen-Schlusskurs)
+            is_bullish = current_price > prev_price
+            status_text = (
+                "🟢 <b>BULLISH TREND</b>" if is_bullish else "🔴 <b>BEARISH TREND</b>"
+            )
+
+            # Beispielhafte Zonen-Berechnung basierend auf dem aktuellen Preis
+            bullish_entry = current_price * 0.995
+            bullish_target = current_price * 1.015
+            bearish_entry = current_price * 1.005
+            bearish_target = current_price * 0.985
+
+            message += (
+                f"📊 <b>Markt-Signal: {name}</b>\n"
+                f"💵 <b>Aktueller Preis:</b> {current_price:.2f}\n"
+                f"📈 <b>Status:</b> {status_text}\n\n"
+                f"🚀 <b>BULLISH ZONE (Kaufen):</b>\n"
+                f"• Einstieg ab: `{bullish_entry:.2f}`\n"
+                f"• Zielbereich: bis `{bullish_target:.2f}`\n\n"
+                f"📉 <b>BEARISH ZONE (Verkaufen):</b>\n"
+                f"• Einstieg ab: `{bearish_entry:.2f}`\n"
+                f"• Zielbereich: bis `{bearish_target:.2f}`\n\n"
+                f"----------------------------------\n"
+            )
+        except Exception as e:
+            print(f"Fehler bei {name}: {e}")
+
+    # Nachricht an Telegram senden
+    send_telegram_message(message)
+
 
 if __name__ == "__main__":
-    send_telegram_signals()
+    check_live_markets()
