@@ -1,14 +1,11 @@
 import requests
 
 def send_telegram_signals():
-    # Dein Telegram Bot-Token und deine Chat-ID
+    # Deine echten Zugangsdaten
     bot_token = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
-    
-    # ⚠️ WICHTIG: Ersetze die Zahl unten durch deine eigene Telegram Chat-ID!
-    # (Falls deine Chat-ID z.B. 123456789 ist, schreibe: chat_id = "123456789")
-    chat_id = "DEINE_CHAT_ID"
+    chat_id = "6551623158"
 
-    # Deine Signaldaten
+    # Signaldaten
     market_signals = [
         {
             "asset_name": "Bitcoin (BTC)",
@@ -50,7 +47,7 @@ def send_telegram_signals():
 
     message = message.strip()
 
-    # An Telegram senden
+    # An Telegram senden mit Timeout (verhindert Aufhängen)
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -58,15 +55,19 @@ def send_telegram_signals():
         "parse_mode": "Markdown"
     }
 
-    response = requests.post(url, json=payload)
-    response_data = response.json()
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        response_data = response.json()
 
-    if response.status_code == 200 and response_data.get("ok"):
-        print("✅ Signal erfolgreich an Telegram gesendet!")
-    else:
-        print("❌ Fehler beim Senden an Telegram:")
-        print(response_data)
-        raise Exception(f"Telegram API Fehler: {response_data}")
+        if response.status_code == 200 and response_data.get("ok"):
+            print("✅ Signal erfolgreich an Telegram gesendet!")
+        else:
+            print("❌ Fehler beim Senden an Telegram:")
+            print(response_data)
+            raise Exception(f"Telegram API Fehler: {response_data}")
+    except requests.exceptions.Timeout:
+        print("❌ Fehler: Zeitüberschreitung (Timeout) bei der Verbindung zu Telegram.")
+        raise
 
 if __name__ == "__main__":
     send_telegram_signals()
