@@ -1,14 +1,11 @@
-import os
 import requests
 import yfinance as yf
 
-# Telegram Zugangsdaten
 BOT_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
 CHAT_ID = "6551623158"
 
 
 def send_telegram_message(message: str):
-    """Sendet eine formatierte Nachricht an deinen Telegram-Chat."""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
 
@@ -17,13 +14,12 @@ def send_telegram_message(message: str):
         if response.status_code == 200:
             print("✅ Telegram-Nachricht erfolgreich gesendet!")
         else:
-            print(f"❌ Fehler beim Senden: {response.text}")
+            print(f"❌ Fehler: {response.text}")
     except Exception as e:
-        print(f"⚠️ Netzwerkfehler: {e}")
+        print(f"⚠️ Fehler: {e}")
 
 
 def analyze_and_send_signal(symbol="GC=F", asset_name="Gold (XAU/USD)"):
-    """Holt die aktuellen Marktdaten von yfinance und baut das Signal auf."""
     ticker = yf.Ticker(symbol)
     df = ticker.history(period="5d", interval="1h")
 
@@ -31,36 +27,52 @@ def analyze_and_send_signal(symbol="GC=F", asset_name="Gold (XAU/USD)"):
         print("Keine Daten erhalten.")
         return
 
-    # Aktueller Preis
     current_price = round(df["Close"].iloc[-1], 2)
-
-    # Einfache Berechnung von Support & Resistance (letzte 24 Stunden)
     recent_data = df.tail(24)
     support = round(recent_data["Low"].min(), 2)
     resistance = round(recent_data["High"].max(), 2)
 
-    # Beispiel-Logik für Signal-Erstellung
-    # (Kannst du je nach deiner Strategie/RSI/Moving Averages anpassen)
+    # Signal-Entscheidung basierend auf aktuellem Preis
     if current_price > (support + resistance) / 2:
-        signal_typ = "🟢 KAUFEN (BUY)"
-        von_preis = support
-        bis_preis = current_price
-        target_price = round(resistance * 1.002, 2)
-    else:
-        signal_typ = "🔴 VERKAUFEN (SELL)"
-        von_preis = current_price
-        bis_preis = resistance
-        target_price = round(support * 0.998, 2)
+        # BUY SIGNAL
+        aktion = "🟢 **BUY (KAUFEN)**"
+        
+        # Klare Kaufzone: Nahe Support bis leicht über aktuellem Kurs
+        buy_from = round(current_price * 0.998, 2)
+        buy_to = round(current_price * 1.001, 2)
+        
+        take_profit = round(resistance, 2)
+        stop_loss = round(support * 0.995, 2)
 
-    # Klar strukturiertes Nachrichten-Format
-    nachricht = (
-        f"🚨 **TRADING SIGNAL** 🚨\n\n"
-        f"• **Asset:** {asset_name}\n"
-        f"• **Aktueller Kurs:** {current_price}\n"
-        f"• **Aktion:** {signal_typ}\n\n"
-        f"📍 **Preis-Bereich:** Von **{von_preis}** bis **{bis_preis}**\n"
-        f"🎯 **Ziel (Take-Profit):** {target_price}\n"
-    )
+        nachricht = (
+            f"🚨 **TRADING SIGNAL** 🚨\n\n"
+            f"• **Asset:** {asset_name}\n"
+            f"• **Aktueller Kurs:** {current_price}\n"
+            f"• **Aktion:** {aktion}\n\n"
+            f"🟢 **BUY-Einstieg:** Ab **{buy_from}** bis **{buy_to}**\n"
+            f"🎯 **Take-Profit (Ziel):** **{take_profit}**\n"
+            f"🛡️ **Stop-Loss (Absicherung):** **{stop_loss}**\n"
+        )
+    else:
+        # SELL SIGNAL
+        aktion = "🔴 **SELL (VERKAUFEN)**"
+        
+        # Klare Verkaufzone: Vom aktuellen Kurs bis leicht höher
+        sell_from = round(current_price * 0.999, 2)
+        sell_to = round(current_price * 1.002, 2)
+        
+        take_profit = round(support, 2)
+        stop_loss = round(resistance * 1.005, 2)
+
+        nachricht = (
+            f"🚨 **TRADING SIGNAL** 🚨\n\n"
+            f"• **Asset:** {asset_name}\n"
+            f"• **Aktueller Kurs:** {current_price}\n"
+            f"• **Aktion:** {aktion}\n\n"
+            f"🔴 **SELL-Einstieg:** Ab **{sell_from}** bis **{sell_to}**\n"
+            f"🎯 **Take-Profit (Ziel):** **{take_profit}**\n"
+            f"🛡️ **Stop-Loss (Absicherung):** **{stop_loss}**\n"
+        )
 
     send_telegram_message(nachricht)
 
