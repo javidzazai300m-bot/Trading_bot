@@ -6,9 +6,8 @@ import yfinance as yf
 # ==========================================
 # KONFIGURATION & ZUGANGSDATEN
 # ==========================================
-# Am sichersten über Umgebungsvariablen (GitHub Secrets) einbinden:
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "DEIN_TELEGRAM_TOKEN_HIER")
-CHAT_ID = os.getenv("CHAT_ID", "6551623158")  # Deine Telegram ID aus dem Screenshot
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc")
+CHAT_ID = os.getenv("CHAT_ID", "6551623158")
 
 SYMBOL = "GC=F"  # Gold Futures / XAUUSD auf yfinance
 INTERVAL = "15m" # Chart-Zeitfenster (z.B. 15m, 1h, 1d)
@@ -71,32 +70,26 @@ def run_bot():
     signal = None
 
     # 🟢 BULLISH / BUY SIGNAL BEDINGUNGEN:
-    # 1. SMA 20 kreuzt SMA 50 nach oben ODER
-    # 2. RSI ist überverkauft (z.B. unter 35)
     if (sma_20_prev < sma_50_prev and sma_20_curr > sma_50_curr) or rsi < 35:
         signal = "BUY"
         action_text = "🟢 BUY (KAUFEN)"
         
-        # Einstiegszone, TP und SL berechnen
         entry_min = round(current_price - 2.0, 2)
         entry_max = round(current_price + 2.0, 2)
-        take_profit = round(current_price + 15.0, 2)  # Ziel nach oben
-        stop_loss = round(current_price - 10.0, 2)   # Absicherung nach unten
+        take_profit = round(current_price + 15.0, 2)
+        stop_loss = round(current_price - 10.0, 2)
 
     # 🔴 BEARISH / SELL SIGNAL BEDINGUNGEN:
-    # 1. SMA 20 kreuzt SMA 50 nach unten ODER
-    # 2. RSI ist überkauft (z.B. über 65)
     elif (sma_20_prev > sma_50_prev and sma_20_curr < sma_50_curr) or rsi > 65:
         signal = "SELL"
         action_text = "🔴 SELL (VERKAUFEN)"
         
-        # Einstiegszone, TP und SL berechnen
         entry_min = round(current_price - 2.0, 2)
         entry_max = round(current_price + 2.0, 2)
-        take_profit = round(current_price - 15.0, 2)  # Ziel nach unten
-        stop_loss = round(current_price + 10.0, 2)   # Absicherung nach oben
+        take_profit = round(current_price - 15.0, 2)
+        stop_loss = round(current_price + 10.0, 2)
 
-    # Wenn ein Signal generiert wurde -> Telegram-Nachricht aufbauen
+    # Wenn ein Signal vorliegt -> Trading Signal senden
     if signal:
         msg = (
             f"🚨 *TRADING SIGNAL* 🚨\n\n"
@@ -110,7 +103,15 @@ def run_bot():
         )
         send_telegram_message(msg)
     else:
-        print(f"Kein klares Signal aktuell. Kurs: {current_price}, RSI: {rsi}")
+        # Neu: Sendet eine Info-Nachricht, wenn der Markt neutral ist
+        status_msg = (
+            f"ℹ️ *MARKT-UPDATE (NEUTRAL)*\n\n"
+            f"• *Asset:* Gold (XAU/USD)\n"
+            f"• *Aktueller Kurs:* {current_price}\n"
+            f"• *Status:* Keines der Kriterien (BUY/SELL) erfüllt.\n"
+            f"📊 *RSI:* {rsi}"
+        )
+        send_telegram_message(status_msg)
 
 if __name__ == "__main__":
     run_bot()
