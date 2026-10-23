@@ -1,74 +1,69 @@
 import os
 import requests
+import datetime
 import yfinance as yf
 
-# Deine Zugangsdaten (sicher in deinem privaten Repo)
-TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
-TELEGRAM_CHAT_ID = "6551623158"
+# Telegram Zugangsdaten
+BOT_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
+CHAT_ID = "6551623158"
 
-
+# Telegram Nachrichten-Funktion
 def send_telegram_message(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
-    try:
-        requests.post(url, json=payload)
-    except Exception as e:
-        print(f"Fehler beim Senden: {e}")
-
-
-def check_live_markets():
-    # Zu überwachende Assets (Beispiele: Gold Futures, Bitcoin, Ethereum)
-    # Yahoo Finance Symbole: Gold = "GC=F", Bitcoin = "BTC-USD", Ethereum = "ETH-USD", XRP = "XRP-USD"
-    assets = {
-        "Gold (XAU/USD)": "GC=F",
-        "Bitcoin (BTC)": "BTC-USD",
-        "Ethereum (ETH)": "ETH-USD",
-        "XRP (XRP)": "XRP-USD",
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
     }
+    try:
+        response = requests.post(url, json=payload)
+        if response.status_code == 200:
+            print("Nachricht erfolgreich gesendet!")
+        else:
+            print(f"Fehler beim Senden: {response.text}")
+    except Exception as e:
+        print(f"Fehler: {e}")
 
-    message = "🤖 <b>LIVE TRADING SIGNAL UPDATE</b>\n\n"
+# Marktanalyse für Trading-Session
+def analyze_market(symbol="GC=F"):  # GC=F steht für Gold-Futures (XAU/USD)
+    try:
+        # Daten abrufen
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(period="5d", interval="15m")
 
-    for name, ticker_symbol in assets.items():
-        try:
-            ticker = yf.Ticker(ticker_symbol)
-            df = ticker.history(period="5d", interval="1h")
+        if df.empty:
+            return "Keine Marktdaten verfügbar."
 
-            if df.empty:
-                continue
+        # Letzter Schlusskurs und 50er EMA berechnen
+        df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
+        
+        last_close = df['Close'].iloc[-1]
+        last_ema = df['EMA50'].iloc[-1]
 
-            current_price = df["Close"].iloc[-1]
-            prev_price = df["Close"].iloc[-2]
+        # Bestimme Trend/Richtung
+        if last_close > last_ema:
+            bias = "🟢 **BULLISH (LONG)**"
+            detail = "Der Kurs liegt über dem EMA 50. Halte nach Buy-Setups Ausschau!"
+        else:
+            bias = "🔴 **BEARISH (SHORT)**"
+            detail = "Der Kurs liegt unter dem EMA 50. Halte nach Sell-Setups Ausschau!"
 
-            # Einfache Trend-Logik (Vergleich zum vorherigen Stundenkerzen-Schlusskurs)
-            is_bullish = current_price > prev_price
-            status_text = (
-                "🟢 <b>BULLISH TREND</b>" if is_bullish else "🔴 <b>BEARISH TREND</b>"
-            )
+        # Aktuelle Zeit bestimmen
+        now_str = datetime.datetime.now().strftime("%H:%M Uhr (UTC/CET)")
 
-            # Beispielhafte Zonen-Berechnung basierend auf dem aktuellen Preis
-            bullish_entry = current_price * 0.995
-            bullish_target = current_price * 1.015
-            bearish_entry = current_price * 1.005
-            bearish_target = current_price * 0.985
+        # Nachricht erstellen
+        message = (
+            f"⏰ **TRADING SESSION ALERT** ({now_str})\n"
+            f"📊 **Asset:** Gold (XAU/USD)\n\n"
+            f"🎯 **Markttrend / Direction:** {bias}\n"
+            f"💵 **Aktueller Kurs:** `{last_close:.2f}`\n\n"
+            f"💡 **Analyse:**\n{detail}"
+        )
+        return message
 
-            message += (
-                f"📊 <b>Markt-Signal: {name}</b>\n"
-                f"💵 <b>Aktueller Preis:</b> {current_price:.2f}\n"
-                f"📈 <b>Status:</b> {status_text}\n\n"
-                f"🚀 <b>BULLISH ZONE (Kaufen):</b>\n"
-                f"• Einstieg ab: `{bullish_entry:.2f}`\n"
-                f"• Zielbereich: bis `{bullish_target:.2f}`\n\n"
-                f"📉 <b>BEARISH ZONE (Verkaufen):</b>\n"
-                f"• Einstieg ab: `{bearish_entry:.2f}`\n"
-                f"• Zielbereich: bis `{bearish_target:.2f}`\n\n"
-                f"----------------------------------\n"
-            )
-        except Exception as e:
-            print(f"Fehler bei {name}: {e}")
-
-    # Nachricht an Telegram senden
-    send_telegram_message(message)
-
+    except Exception as e:
+        return f"Fehler bei der Analyse: {e}"
 
 if __name__ == "__main__":
-    check_live_markets()
+    signal_text = analyze_market("GC=F")
+    send_telegram_message(signal_text)
