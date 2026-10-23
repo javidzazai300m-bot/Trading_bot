@@ -3,7 +3,6 @@ import requests
 import datetime
 import yfinance as yf
 
-# Telegram Zugangsdaten
 BOT_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
 CHAT_ID = "6551623158"
 
@@ -15,29 +14,21 @@ def send_telegram_message(message):
         "parse_mode": "Markdown"
     }
     try:
-        response = requests.post(url, json=payload)
-        if response.status_code == 200:
-            print("Signal erfolgreich gesendet!")
-        else:
-            print(f"Fehler beim Senden: {response.text}")
+        requests.post(url, json=payload)
     except Exception as e:
         print(f"Fehler: {e}")
 
 def check_entry_signal(symbol="GC=F"):
     try:
-        # Wir holen uns die letzten Kerzen (z.B. im 15-Minuten-Takt)
         ticker = yf.Ticker(symbol)
         df = ticker.history(period="2d", interval="15m")
 
         if df.empty or len(df) < 10:
-            print("Keine ausreichenden Marktdaten.")
             return
 
-        # Gleitende Durchschnitte (EMA 9 und EMA 21) für das Signal berechnen
         df['EMA9'] = df['Close'].ewm(span=9, adjust=False).mean()
         df['EMA21'] = df['Close'].ewm(span=21, adjust=False).mean()
 
-        # Vorherige und aktuelle Kerze vergleichen
         prev_ema9 = df['EMA9'].iloc[-2]
         prev_ema21 = df['EMA21'].iloc[-2]
         
@@ -45,38 +36,56 @@ def check_entry_signal(symbol="GC=F"):
         last_ema21 = df['EMA21'].iloc[-1]
         last_close = df['Close'].iloc[-1]
 
-        signal = None
+        now = datetime.datetime.now()
+        now_str = now.strftime("%H:%M Uhr")
         
-        # Bullish Crossover (EMA 9 kreuzt EMA 21 nach oben -> Kaufen)
+        # Berechne ein empfohlenes Trade-Ende (z.B. 2 Stunden nach dem Signal)
+        trade_ende = (now + datetime.timedelta(hours=2)).strftime("%H:%M Uhr")
+
+        # Crossover Prüfungen
         if prev_ema9 <= prev_ema21 and last_ema9 > last_ema21:
-            signal = "🟢 **BUY / LONG POSITION JETZT ÖFFNEN**"
-            reason = "Der Trend ist kurzfristig nach oben gedreht (EMA 9 über EMA 21)."
-            sl = last_close * 0.997  # Stop Loss knapp darunter
-            tp = last_close * 1.006  # Take Profit als Ziel
-
-        # Bearish Crossover (EMA 9 kreuzt EMA 21 nach unten -> Verkaufen)
-        elif prev_ema9 >= prev_ema21 and last_ema9 < last_ema21:
-            signal = "🔴 **SELL / SHORT POSITION JETZT ÖFFNEN**"
-            reason = "Der Trend ist kurzfristig nach unten gedreht (EMA 9 unter EMA 21)."
-            sl = last_close * 1.003  # Stop Loss knapp darüber
-            tp = last_close * 0.994  # Take Profit als Ziel
-
-        # Wenn ein Signal da ist, schicken wir dir die Nachricht
-        if signal:
-            now_str = datetime.datetime.now().strftime("%H:%M Uhr")
+            sl = last_close * 0.997
+            tp = last_close * 1.006
             message = (
-                f"🚨 **TRADING SIGNAL: JETZT HANDELN!** ({now_str})\n"
+                f"🚨 **TRADING SIGNAL & ZEITFENSTER!** ({now_str})\n"
                 f"📊 **Asset:** Gold (XAU/USD)\n\n"
-                f"🎯 **Aktion:** {signal}\n"
+                f"🎯 **Aktion:** 🟢 **BUY / LONG POSITION JETZT ÖFFNEN**\n"
                 f"💵 **Einstiegskurs:** `{last_close:.2f}`\n\n"
-                f"💡 **Grund:** {reason}\n\n"
-                f"🛡️ **Vorschlag für Risk Management:**\n"
-                f"• Stop Loss (SL): `{sl:.2f}`\n"
-                f"• Take Profit (TP): `{tp:.2f}`"
+                f"⏳ **Handels- & Zeitfenster:**\n"
+                f"• 🚀 **Einstieg:** Ab sofort\n"
+                f"• ⏱️ **Max. Haltedauer bis:** ca. **{trade_ende}**\n\n"
+                f"🛡️ **Risk Management:**\n"
+                f"• SL: `{sl:.2f}`\n"
+                f"• TP: `{tp:.2f}`"
+            )
+            send_telegram_message(message)
+
+        elif prev_ema9 >= prev_ema21 and last_ema9 < last_ema21:
+            sl = last_close * 1.003
+            tp = last_close * 0.994
+            message = (
+                f"🚨 **TRADING SIGNAL & ZEITFENSTER!** ({now_str})\n"
+                f"📊 **Asset:** Gold (XAU/USD)\n\n"
+                f"🎯 **Aktion:** 🔴 **SELL / SHORT POSITION JETZT ÖFFNEN**\n"
+                f"💵 **Einstiegskurs:** `{last_close:.2f}`\n\n"
+                f"⏳ **Handels- & Zeitfenster:**\n"
+                f"• 🚀 **Einstieg:** Ab sofort\n"
+                f"• ⏱️ **Max. Haltedauer bis:** ca. **{trade_ende}**\n\n"
+                f"🛡️ **Risk Management:**\n"
+                f"• SL: `{sl:.2f}`\n"
+                f"• TP: `{tp:.2f}`"
             )
             send_telegram_message(message)
         else:
-            print("Kein neues Kreuzungssignal im aktuellen Takt. Bot wartet...")
+            trend = "🟢 **BULLISH**" if last_ema9 > last_ema21 else "🔴 **BEARISH**"
+            message = (
+                f"⏳ **MARKT STATUS** ({now_str})\n"
+                f"📊 **Asset:** Gold (XAU/USD)\n"
+                f"💵 **Aktueller Kurs:** `{last_close:.2f}`\n"
+                f"📈 **Aktueller Trend:** {trend}\n\n"
+                f"ℹ️ *Kein neues Einstufungs-Signal. Bot wartet auf den nächsten Richtungswechsel.*"
+            )
+            send_telegram_message(message)
 
     except Exception as e:
         print(f"Fehler bei der Analyse: {e}")
