@@ -21,75 +21,47 @@ def send_telegram_message(message):
 def check_entry_signal(symbol="GC=F"):
     try:
         ticker = yf.Ticker(symbol)
-        df = ticker.history(period="2d", interval="15m")
+        df = ticker.history(period="5d", interval="15m")
 
-        if df.empty or len(df) < 10:
+        if df.empty or len(df) < 20:
             return
 
-        df['EMA9'] = df['Close'].ewm(span=9, adjust=False).mean()
-        df['EMA21'] = df['Close'].ewm(span=21, adjust=False).mean()
-
-        prev_ema9 = df['EMA9'].iloc[-2]
-        prev_ema21 = df['EMA21'].iloc[-2]
-        
-        last_ema9 = df['EMA9'].iloc[-1]
-        last_ema21 = df['EMA21'].iloc[-1]
+        df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
         last_close = df['Close'].iloc[-1]
-
-        now = datetime.datetime.now()
-        now_str = now.strftime("%H:%M Uhr")
+        last_ema = df['EMA50'].iloc[-1]
         
-        # Feste Trading-Zeiten / Haupt-Sessions (Deutsche Zeit CET)
-        # Zeigt das aktive Handelsfenster an
-        handels_fenster = "09:00 – 17:30 Uhr (London & New York Session)"
-        gueltig_bis = (now + datetime.timedelta(hours=2)).strftime("%H:%M Uhr")
+        # Berechne Preis-Zonen (Support und Resistance aus den letzten 20 Kerzen)
+        support = df['Low'].tail(20).min()
+        resistance = df['High'].tail(20).max()
 
-        # Crossover Prüfungen
-        if prev_ema9 <= prev_ema21 and last_ema9 > last_ema21:
-            sl = last_close * 0.997
-            tp = last_close * 1.006
-            message = (
-                f"🚨 **TRADING SIGNAL & ZEITEN!** ({now_str})\n"
-                f"📊 **Asset:** Gold (XAU/USD)\n\n"
-                f"🎯 **Aktion:** 🟢 **BUY / LONG POSITION JETZT ÖFFNEN**\n"
-                f"💵 **Einstiegskurs:** `{last_close:.2f}`\n\n"
-                f"⏳ **Traden & Zeiten:**\n"
-                f"• 🕒 **Aktives Handelsfenster:** {handels_fenster}\n"
-                f"• ⏱️ **Signal gültig / Halten bis:** ca. **{gueltig_bis}**\n\n"
-                f"🛡️ **Risk Management:**\n"
-                f"• SL: `{sl:.2f}`\n"
-                f"• TP: `{tp:.2f}`"
-            )
-            send_telegram_message(message)
+        now_str = datetime.datetime.now().strftime("%H:%M Uhr")
 
-        elif prev_ema9 >= prev_ema21 and last_ema9 < last_ema21:
-            sl = last_close * 1.003
-            tp = last_close * 0.994
-            message = (
-                f"🚨 **TRADING SIGNAL & ZEITEN!** ({now_str})\n"
-                f"📊 **Asset:** Gold (XAU/USD)\n\n"
-                f"🎯 **Aktion:** 🔴 **SELL / SHORT POSITION JETZT ÖFFNEN**\n"
-                f"💵 **Einstiegskurs:** `{last_close:.2f}`\n\n"
-                f"⏳ **Traden & Zeiten:**\n"
-                f"• 🕒 **Aktives Handelsfenster:** {handels_fenster}\n"
-                f"• ⏱️ **Signal gültig / Halten bis:** ca. **{gueltig_bis}**\n\n"
-                f"🛡️ **Risk Management:**\n"
-                f"• SL: `{sl:.2f}`\n"
-                f"• TP: `{tp:.2f}`"
+        # Bestimme Trend und Preis-Bereiche
+        if last_close > last_ema:
+            trend = "🟢 **BULLISH (LONG)**"
+            preis_zone = (
+                f"• 🟢 **Bullish-Bereich (Kaufen):** Zwischen `{support:.2f}` und `{last_close:.2f}`\n"
+                f"• 🎯 **Handelsempfehlung:** Suche Long-Einstiege in diesem Preisband (Ziel Richtung `{resistance:.2f}`)"
             )
-            send_telegram_message(message)
         else:
-            trend = "🟢 **BULLISH**" if last_ema9 > last_ema21 else "🔴 **BEARISH**"
-            message = (
-                f"⏳ **MARKT STATUS & ZEITEN** ({now_str})\n"
-                f"📊 **Asset:** Gold (XAU/USD)\n"
-                f"💵 **Aktueller Kurs:** `{last_close:.2f}`\n"
-                f"📈 **Aktueller Trend:** {trend}\n\n"
-                f"🕒 **Empfohlene Traden-Zeit:**\n"
-                f"• Haupt-Handelsfenster: **{handels_fenster}**\n"
-                f"• Nächster Check in 15 Min. Bot wartet auf Richtungswechsel."
+            trend = "🔴 **BEARISH (SHORT)**"
+            preis_zone = (
+                f"• 🔴 **Bearish-Bereich (Verkaufen):** Zwischen `{last_close:.2f}` und `{resistance:.2f}`\n"
+                f"• 🎯 **Handelsempfehlung:** Suche Short-Einstiege in diesem Preisband (Ziel Richtung `{support:.2f}`)"
             )
-            send_telegram_message(message)
+
+        message = (
+            f"📊 **MARKT & PREIS-ZONEN** ({now_str})\n"
+            f"🪙 **Asset:** Gold (XAU/USD)\n"
+            f"💵 **Aktueller Kurs:** `{last_close:.2f}`\n"
+            f"📈 **Aktueller Trend:** {trend}\n\n"
+            f"📍 **Genaue Preis-Grenzen für den Trade:**\n"
+            f"{preis_zone}\n\n"
+            f"🛡️ **Wichtige Chart-Marken:**\n"
+            f"• Support (Unterstützung): `{support:.2f}`\n"
+            f"• Resistance (Widerstand): `{resistance:.2f}`"
+        )
+        send_telegram_message(message)
 
     except Exception as e:
         print(f"Fehler bei der Analyse: {e}")
