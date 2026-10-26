@@ -2,13 +2,14 @@ name: Trading Signal Bot
 
 on:
   schedule:
-    # Läuft automatisch alle 15 Minuten
+    # Führt das Skript jetzt alle 15 Minuten aus
     - cron: '*/15 * * * *'
-  workflow_dispatch: # Erlaubt es dir, den Bot jederzeit manuell in GitHub zu starten
+  workflow_dispatch: # Erlaubt weiterhin das manuelle Starten per Button
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+
     steps:
       - name: Code auschecken
         uses: actions/checkout@v3
@@ -19,7 +20,9 @@ jobs:
           python-version: '3.10'
 
       - name: Abhängigkeiten installieren
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests yfinance pandas
 
       - name: Skript ausführen
         run: python main.py
