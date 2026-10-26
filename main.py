@@ -1,13 +1,12 @@
 import requests
-import MetaTrader5 as mt5
+import yfinance as yf
 
 # --- KONFIGURATION ---
 TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
-CHAT_ID = "6551623158"  #[span_1](start_span)[span_1](end_span)
-SYMBOL = "XAUUSD"
+CHAT_ID = "6551623158"
+SYMBOL = "GC=F"  # Gold Futures auf Yahoo Finance
 
 def send_telegram_message(message):
-    """Sendet die Nachricht an deinen Telegram-Chat."""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
@@ -18,49 +17,36 @@ def send_telegram_message(message):
     return response.json()
 
 def check_market_and_send_signal():
-    """Verbindet sich mit MT5, prüft die Richtung und sendet das Signal."""
-    # 1. Verbindung zu MT5 herstellen
-    if not mt5.initialize():
-        print("MT5 Initialisierung fehlgeschlagen:", mt5.last_error())
-        return
-
-    # 2. Aktuellen Tick (Preis) direkt vom Broker abrufen
-    symbol_info = mt5.symbol_info_tick(SYMBOL)
-    if symbol_info is None:
-        print(f"Konnte Kurs für {SYMBOL} nicht abrufen.")
-        mt5.shutdown()
-        return
-
-    # Für BUY nutzen wir den Ask-Kurs, für SELL den Bid-Kurs
-    ask_preis = symbol_info.ask
-    bid_preis = symbol_info.bid
-    aktueller_kurs = ask_preis  # Standardmäßig
-
-    # --- HIER DEINE STRATEGIE-LOGIK EINBAUEN ---
-    # Beispiel: Du ermittelst anhand deiner Indikatoren (z.B. RSI), ob Buy oder Sell vorliegt.
-    rsi_wert = 55.0  # Ersetze dies durch deinen echten RSI-Wert
+    # Kurs über yfinance holen (funktioniert in der GitHub Cloud)
+    ticker = yf.Ticker(SYMBOL)
+    data = ticker.history(period="1d", interval="1m")
     
-    # Beispiel-Bedingung: Wenn RSI < 45 -> BUY, wenn RSI > 55 -> SELL
+    if data.empty:
+        print("Konnte keine Kursdaten abrufen.")
+        return
+
+    aktueller_kurs = data['Close'].iloc[-1]
+    
+    # Beispielhafte Logik für Signal
+    rsi_wert = 55.0  # Hier kannst du deine RSI-Berechnung einfügen
+    
     if rsi_wert < 45:
         signal_typ = "BUY"
         emoji = "🟢"
         aktion_text = "BUY (KAUFEN)"
-        aktueller_kurs = ask_preis
         einstieg_min = aktueller_kurs - 1.0
         einstieg_max = aktueller_kurs + 1.0
-        take_profit = aktueller_kurs + 10.0  # Ziel nach oben
-        stop_loss = aktueller_kurs - 10.0    # Absicherung nach unten
+        take_profit = aktueller_kurs + 10.0
+        stop_loss = aktueller_kurs - 10.0
     else:
         signal_typ = "SELL"
         emoji = "🔴"
         aktion_text = "SELL (VERKAUFEN)"
-        aktueller_kurs = bid_preis
         einstieg_min = aktueller_kurs - 1.0
         einstieg_max = aktueller_kurs + 1.0
-        take_profit = aktueller_kurs - 10.0  # Ziel nach unten
-        stop_loss = aktueller_kurs + 10.0    # Absicherung nach oben
+        take_profit = aktueller_kurs - 10.0
+        stop_loss = aktueller_kurs + 10.0
 
-    # 3. Nachricht im exakten Format zusammenbauen
     nachricht = (
         f"{emoji} **TRADING SIGNAL** {emoji}\n\n"
         f"• Asset: Gold (XAU/USD)\n"
@@ -72,15 +58,11 @@ def check_market_and_send_signal():
         f"📊 RSI: {rsi_wert}"
     )
 
-    # 4. An Telegram senden
     result = send_telegram_message(nachricht)
     if result.get("ok"):
         print(f"Erfolgreich {signal_typ}-Signal an Telegram gesendet!")
     else:
         print("Fehler beim Senden:", result)
-
-    # MT5 Verbindung schließen
-    mt5.shutdown()
 
 if __name__ == "__main__":
     check_market_and_send_signal()
