@@ -3,11 +3,11 @@ import yfinance as yf
 
 # --- KONFIGURATION ---
 TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
-CHAT_ID = "6551623158" #[span_1](start_span)[span_1](end_span)
-SYMBOL = "GC=F"  # Gold Futures / Spot
+CHAT_ID = "6551623158"
+SYMBOL = "GC=F"  # Gold Futures / Spot Datenquelle für GitHub
 
 def send_telegram_message(message):
-    """Sendet eine Nachricht direkt an deinen Telegram-Chat."""
+    """Sendet die Nachricht direkt an deinen Telegram-Chat."""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
@@ -16,33 +16,31 @@ def send_telegram_message(message):
     }
     try:
         response = requests.post(url, json=payload, timeout=10)
-        print("Telegram API Response:", response.text)
         return response.json()
     except Exception as e:
-        print("Fehler beim Telegram-Aufruf:", e)
+        print(f"Fehler beim Senden: {e}")
         return {}
 
-def check_market_and_send_signal():
+def main():
     try:
-        # 1. Daten abrufen
+        # 1. Kursdaten von Yahoo Finance abrufen
         ticker = yf.Ticker(SYMBOL)
         data = ticker.history(period="1d", interval="1m")
         
-        # Falls yfinance leer ist, versuchen wir das Ausweich-Symbol XAUUSD=X
+        # Falls GC=F leer ist, versuchen wir das alternative Symbol
         if data.empty:
-            print("Erster Versuch leer, versuche XAUUSD=X...")
             ticker = yf.Ticker("XAUUSD=X")
             data = ticker.history(period="1d", interval="1m")
 
         if data.empty:
-            send_telegram_message("⚠️ **Fehler:** Konnte keine Kursdaten von Yahoo Finance abrufen. Bitte später erneut versuchen.")
+            send_telegram_message("⚠️ **Fehler:** Konnte keine Kursdaten abrufen.")
             return
 
-        # 2. Aktuellen Kurs ermitteln
+        # 2. Aktuellen Kurs auslesen
         aktueller_kurs = float(data['Close'].iloc[-1])
         
-        # 3. Signallogik (Beispielhafter RSI / Richtungsberechnung)
-        rsi_wert = 55.0  # Ersetze dies durch deine echte RSI-Berechnung
+        # 3. RSI / Signal-Logik (Beispielhaft, damit immer ein Signal kommt)
+        rsi_wert = 55.0  
 
         if rsi_wert >= 50:
             signal_typ = "SELL"
@@ -61,7 +59,7 @@ def check_market_and_send_signal():
             take_profit = aktueller_kurs + 10.0
             stop_loss = aktueller_kurs - 10.0
 
-        # 4. Nachricht aufbauen
+        # 4. Nachricht im sauberen Format zusammenbauen
         nachricht = (
             f"{emoji} **TRADING SIGNAL** {emoji}\n\n"
             f"• Asset: Gold (XAU/USD)\n"
@@ -73,13 +71,15 @@ def check_market_and_send_signal():
             f"📊 RSI: {rsi_wert}"
         )
 
-        # 5. Absenden
-        res = send_telegram_message(nachricht)
-        print("Ergebnis:", res)
+        # 5. An Telegram senden
+        result = send_telegram_message(nachricht)
+        if result.get("ok"):
+            print(f"Erfolgreich {signal_typ}-Signal gesendet!")
+        else:
+            print(f"Telegram-Fehler: {result}")
 
     except Exception as e:
-        # Sendet eine Fehlermeldung direkt an Telegram, falls das Skript abstürzt
-        send_telegram_message(f"❌ **Skript-Fehler:** {str(e)}")
+        print(f"Schwerwiegender Fehler: {e}")
 
 if __name__ == "__main__":
-    check_market_and_send_signal()
+    main()
