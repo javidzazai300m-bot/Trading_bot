@@ -3,8 +3,8 @@ import yfinance as yf
 
 # --- KONFIGURATION ---
 TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
-CHAT_ID = "6551623158"  # Deine Chat-ID aus dem Screenshots
-SYMBOL = "XAUUSD=X"      # XAUUSD Spot-Preis für korrekte Goldpreise
+CHAT_ID = "6551623158"  #[span_1](start_span)[span_1](end_span)
+SYMBOL = "XAUUSD=X"
 
 def send_telegram_message(message):
     """Sendet die Nachricht an deinen Telegram-Chat."""
@@ -29,20 +29,11 @@ def check_market_and_send_signal():
     # Letzten geschlossenen Preis holen
     aktueller_kurs = float(data['Close'].iloc[-1])
     
-    # --- STRATEGIE / RSI LOGIK ---
-    # Hier kannst du deine Indikator-Logik einfügen oder anpassen
-    rsi_wert = 55.0  # Beispielwert für RSI
+    # Beispielhafter RSI (oder hier deine echte RSI-Berechnung)
+    rsi_wert = 55.0
 
-    # Kauf/Verkauf Entscheidung
-    if rsi_wert < 45:
-        signal_typ = "BUY"
-        emoji = "🟢"
-        aktion_text = "BUY (KAUFEN)"
-        einstieg_min = aktueller_kurs - 1.0
-        einstieg_max = aktueller_kurs + 1.0
-        take_profit = aktueller_kurs + 10.0
-        stop_loss = aktueller_kurs - 10.0
-    elif rsi_wert > 55:
+    # Entscheidung für BUY oder SELL
+    if rsi_wert >= 50:
         signal_typ = "SELL"
         emoji = "🔴"
         aktion_text = "SELL (VERKAUFEN)"
@@ -51,17 +42,13 @@ def check_market_and_send_signal():
         take_profit = aktueller_kurs - 10.0
         stop_loss = aktueller_kurs + 10.0
     else:
-        # Markt ist neutral
-        nachricht_neutral = (
-            f"ℹ️ **MARKT-UPDATE (NEUTRAL)**\n\n"
-            f"• Asset: Gold (XAU/USD)\n"
-            f"• Aktueller Kurs: {aktueller_kurs:.2f}\n"
-            f"• Status: Keines der Kriterien (BUY/SELL) erfüllt.\n"
-            f"📊 RSI: {rsi_wert}"
-        )
-        send_telegram_message(nachricht_neutral)
-        print("Neutrales Markt-Update gesendet.")
-        return
+        signal_typ = "BUY"
+        emoji = "🟢"
+        aktion_text = "BUY (KAUFEN)"
+        einstieg_min = aktueller_kurs - 1.0
+        einstieg_max = aktueller_kurs + 1.0
+        take_profit = aktueller_kurs + 10.0
+        stop_loss = aktueller_kurs - 10.0
 
     # Signal-Nachricht zusammenbauen
     nachricht = (
@@ -84,3 +71,4 @@ def check_market_and_send_signal():
 
 if __name__ == "__main__":
     check_market_and_send_signal()
+
