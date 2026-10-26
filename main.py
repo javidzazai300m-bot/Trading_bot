@@ -1,111 +1,86 @@
-import os
 import requests
-import yfinance as yf
+import MetaTrader5 as mt5
 
 # --- KONFIGURATION ---
-TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
-CHAT_ID = "6551623158"
-SYMBOL = "GC=F"  # Gold (XAU/USD über Yahoo Finance)
-RSI_PERIOD = 14
-
-def get_market_data():
-    """Lädt aktuelle Kursdaten und berechnet den RSI."""
-    try:
-        ticker = yf.Ticker(SYMBOL)
-        df = ticker.history(period="1d", interval="1m")
-        if df.empty or len(df) < RSI_PERIOD + 2:
-            return None, None
-        
-        current_price = df['Close'].iloc[-1]
-        
-        # RSI Berechnung
-        delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=RSI_PERIOD).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=RSI_PERIOD).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        current_rsi = rsi.iloc[-1]
-        
-        return float(current_price), float(current_rsi)
-    except Exception as e:
-        print(f"Fehler beim Abrufen der Marktdaten: {e}")
-        return None, None
+TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
+CHAT_ID = "6551623158"  #[span_1](start_span)[span_1](end_span)
+SYMBOL = "XAUUSD"
 
 def send_telegram_message(message):
-    """Sendet die Nachricht direkt an deinen Telegram-Bot."""
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    """Sendet die Nachricht an deinen Telegram-Chat."""
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
         "text": message,
         "parse_mode": "Markdown"
     }
-    try:
-        response = requests.post(url, json=payload)
-        print("Telegram Antwort:", response.text)
-        return response.json()
-    except Exception as e:
-        print(f"Fehler beim Senden an Telegram: {e}")
-        return None
+    response = requests.post(url, json=payload)
+    return response.json()
 
-def main():
-    price, rsi = get_market_data()
-    
-    if price is None or rsi is None:
-        print("Konnte keine gültigen Marktdaten abrufen.")
+def check_market_and_send_signal():
+    """Verbindet sich mit MT5, prüft die Richtung und sendet das Signal."""
+    # 1. Verbindung zu MT5 herstellen
+    if not mt5.initialize():
+        print("MT5 Initialisierung fehlgeschlagen:", mt5.last_error())
         return
 
-    print(f"Aktueller Kurs: {price:.2f} | RSI: {rsi:.1f}")
+    # 2. Aktuellen Tick (Preis) direkt vom Broker abrufen
+    symbol_info = mt5.symbol_info_tick(SYMBOL)
+    if symbol_info is None:
+        print(f"Konnte Kurs für {SYMBOL} nicht abrufen.")
+        mt5.shutdown()
+        return
 
-    # --- SIGNAL-LOGIK (EMPFINDLICHER EINGESTELLT) ---
+    # Für BUY nutzen wir den Ask-Kurs, für SELL den Bid-Kurs
+    ask_preis = symbol_info.ask
+    bid_preis = symbol_info.bid
+    aktueller_kurs = ask_preis  # Standardmäßig
+
+    # --- HIER DEINE STRATEGIE-LOGIK EINBAUEN ---
+    # Beispiel: Du ermittelst anhand deiner Indikatoren (z.B. RSI), ob Buy oder Sell vorliegt.
+    rsi_wert = 55.0  # Ersetze dies durch deinen echten RSI-Wert
     
-    # SELL Signal ab RSI >= 55
-    if rsi >= 55:
-        entry_low = round(price - 1.0, 2)
-        entry_high = round(price + 1.0, 2)
-        tp = round(price - 10.0, 2)
-        sl = round(price + 8.0, 2)
-        
-        message = (
-            f"🚨 *TRADING SIGNAL* 🚨\n\n"
-            f"• Asset: Gold (XAU/USD)\n"
-            f"• Aktueller Kurs: {price:.2f}\n"
-            f"• Aktion: 🔴 *SELL (VERKAUFEN)*\n\n"
-            f"🎯 *Einstieg:* Ab {entry_low} bis {entry_high}\n"
-            f"🎯 *Take-Profit (Ziel):* {tp}\n"
-            f"🛡 *Stop-Loss (Absicherung):* {sl}\n\n"
-            f"📊 *RSI:* {rsi:.1f}"
-        )
-        send_telegram_message(message)
-
-    # BUY Signal ab RSI <= 45
-    elif rsi <= 45:
-        entry_low = round(price - 1.0, 2)
-        entry_high = round(price + 1.0, 2)
-        tp = round(price + 10.0, 2)
-        sl = round(price - 8.0, 2)
-        
-        message = (
-            f"🚨 *TRADING SIGNAL* 🚨\n\n"
-            f"• Asset: Gold (XAU/USD)\n"
-            f"• Aktueller Kurs: {price:.2f}\n"
-            f"• Aktion: 🟢 *BUY (KAUFEN)*\n\n"
-            f"🎯 *Einstieg:* Ab {entry_low} bis {entry_high}\n"
-            f"🎯 *Take-Profit (Ziel):* {tp}\n"
-            f"🛡 *Stop-Loss (Absicherung):* {sl}\n\n"
-            f"📊 *RSI:* {rsi:.1f}"
-        )
-        send_telegram_message(message)
-
-    # Neutrale Status-Update Nachricht (damit du IMMER eine Benachrichtigung erhältst)
+    # Beispiel-Bedingung: Wenn RSI < 45 -> BUY, wenn RSI > 55 -> SELL
+    if rsi_wert < 45:
+        signal_typ = "BUY"
+        emoji = "🟢"
+        aktion_text = "BUY (KAUFEN)"
+        aktueller_kurs = ask_preis
+        einstieg_min = aktueller_kurs - 1.0
+        einstieg_max = aktueller_kurs + 1.0
+        take_profit = aktueller_kurs + 10.0  # Ziel nach oben
+        stop_loss = aktueller_kurs - 10.0    # Absicherung nach unten
     else:
-        message = (
-            f"ℹ️ *MARKT-UPDATE (NEUTRAL)*\n\n"
-            f"• Asset: Gold (XAU/USD)\n"
-            f"• Aktueller Kurs: {price:.2f}\n"
-            f"• Status: Keines der Kriterien (BUY/SELL) erfüllt.\n"
-            f"📊 *RSI:* {rsi:.1f}"
-        )
-        send_telegram_message(message)
+        signal_typ = "SELL"
+        emoji = "🔴"
+        aktion_text = "SELL (VERKAUFEN)"
+        aktueller_kurs = bid_preis
+        einstieg_min = aktueller_kurs - 1.0
+        einstieg_max = aktueller_kurs + 1.0
+        take_profit = aktueller_kurs - 10.0  # Ziel nach unten
+        stop_loss = aktueller_kurs + 10.0    # Absicherung nach oben
+
+    # 3. Nachricht im exakten Format zusammenbauen
+    nachricht = (
+        f"{emoji} **TRADING SIGNAL** {emoji}\n\n"
+        f"• Asset: Gold (XAU/USD)\n"
+        f"• Aktueller Kurs: {aktueller_kurs:.2f}\n"
+        f"• Aktion: {emoji} {aktion_text}\n\n"
+        f"🎯 Einstieg: Ab {einstieg_min:.1f} bis {einstieg_max:.1f}\n"
+        f"🎯 Take-Profit (Ziel): {take_profit:.1f}\n"
+        f"🛡️ Stop-Loss (Absicherung): {stop_loss:.1f}\n\n"
+        f"📊 RSI: {rsi_wert}"
+    )
+
+    # 4. An Telegram senden
+    result = send_telegram_message(nachricht)
+    if result.get("ok"):
+        print(f"Erfolgreich {signal_typ}-Signal an Telegram gesendet!")
+    else:
+        print("Fehler beim Senden:", result)
+
+    # MT5 Verbindung schließen
+    mt5.shutdown()
 
 if __name__ == "__main__":
-    main()
+    check_market_and_send_signal()
