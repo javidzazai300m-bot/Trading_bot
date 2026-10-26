@@ -56,9 +56,10 @@ def main():
 
     print(f"Aktueller Kurs: {price:.2f} | RSI: {rsi:.1f}")
 
-    # --- BEISPIEL-LOGIK FÜR SIGNALE ---
-    # SELL Signal bei RSI über 65
-    if rsi >= 65:
+    # --- SIGNAL-LOGIK (EMPFINDLICHER EINGESTELLT) ---
+    
+    # SELL Signal ab RSI >= 55
+    if rsi >= 55:
         entry_low = round(price - 1.0, 2)
         entry_high = round(price + 1.0, 2)
         tp = round(price - 10.0, 2)
@@ -76,8 +77,8 @@ def main():
         )
         send_telegram_message(message)
 
-    # BUY Signal bei RSI unter 35
-    elif rsi <= 35:
+    # BUY Signal ab RSI <= 45
+    elif rsi <= 45:
         entry_low = round(price - 1.0, 2)
         entry_high = round(price + 1.0, 2)
         tp = round(price + 10.0, 2)
@@ -94,8 +95,17 @@ def main():
             f"📊 *RSI:* {rsi:.1f}"
         )
         send_telegram_message(message)
+
+    # Neutrale Status-Update Nachricht (damit du IMMER eine Benachrichtigung erhältst)
     else:
-        print("Kein Kriterium für ein Signal erfüllt (Markt im neutralen Bereich).")
+        message = (
+            f"ℹ️ *MARKT-UPDATE (NEUTRAL)*\n\n"
+            f"• Asset: Gold (XAU/USD)\n"
+            f"• Aktueller Kurs: {price:.2f}\n"
+            f"• Status: Keines der Kriterien (BUY/SELL) erfüllt.\n"
+            f"📊 *RSI:* {rsi:.1f}"
+        )
+        send_telegram_message(message)
 
 if __name__ == "__main__":
     main()
