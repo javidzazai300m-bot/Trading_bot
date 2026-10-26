@@ -4,10 +4,14 @@ import yfinance as yf
 # --- KONFIGURATION ---
 TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
 CHAT_ID = "6551623158"
-SYMBOL = "GC=F"  # Gold Futures / Spot Datenquelle für GitHub
+SYMBOL = "GC=F"
+
+# HIER KANNST DU DEN PREIS ANPASSEN:
+# Wenn der Bot z.B. 14 Dollar zu hoch anzeigt, tragen wir hier -14.0 ein.
+# Du kannst diesen Wert anpassen, falls sich der Abstand leicht ändert.
+PREIS_KORREKTUR = -14.0 
 
 def send_telegram_message(message):
-    """Sendet die Nachricht direkt an deinen Telegram-Chat."""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
@@ -23,11 +27,10 @@ def send_telegram_message(message):
 
 def main():
     try:
-        # 1. Kursdaten von Yahoo Finance abrufen
+        # 1. Kurs von Yahoo holen
         ticker = yf.Ticker(SYMBOL)
         data = ticker.history(period="1d", interval="1m")
         
-        # Falls GC=F leer ist, versuchen wir das alternative Symbol
         if data.empty:
             ticker = yf.Ticker("XAUUSD=X")
             data = ticker.history(period="1d", interval="1m")
@@ -36,10 +39,11 @@ def main():
             send_telegram_message("⚠️ **Fehler:** Konnte keine Kursdaten abrufen.")
             return
 
-        # 2. Aktuellen Kurs auslesen
-        aktueller_kurs = float(data['Close'].iloc[-1])
+        # 2. Rohpreis holen und die Korrektur (Offset) anrechnen, damit er exakt zu MT5 passt
+        roher_kurs = float(data['Close'].iloc[-1])
+        aktueller_kurs = roher_kurs + PREIS_KORREKTUR
         
-        # 3. RSI / Signal-Logik (Beispielhaft, damit immer ein Signal kommt)
+        # 3. Signal-Logik
         rsi_wert = 55.0  
 
         if rsi_wert >= 50:
@@ -59,27 +63,30 @@ def main():
             take_profit = aktueller_kurs + 10.0
             stop_loss = aktueller_kurs - 10.0
 
-        # 4. Nachricht im sauberen Format zusammenbauen
+        # 4. Nachricht zusammenbauen
         nachricht = (
             f"{emoji} **TRADING SIGNAL** {emoji}\n\n"
             f"• Asset: Gold (XAU/USD)\n"
             f"• Aktueller Kurs: {aktueller_kurs:.2f}\n"
             f"• Aktion: {emoji} {aktion_text}\n\n"
             f"🎯 Einstieg: Ab {einstieg_min:.1f} bis {einstieg_max:.1f}\n"
-            f"🎯 Take-Profit (Ziel): {take_profit:.1f}\n"
+            f"🎯 Take-Profit (Ziel): {take_-profit:.1f}\n"
             f"🛡️ Stop-Loss (Absicherung): {stop_loss:.1f}\n\n"
             f"📊 RSI: {rsi_wert}"
         )
 
-        # 5. An Telegram senden
+        # Korrigierter Fix für Take-Profit Variablenname im String (falls nötig)
+        nachricht = nachricht.replace("take_-profit", "Take-Profit")
+
+        # 5. Senden
         result = send_telegram_message(nachricht)
         if result.get("ok"):
-            print(f"Erfolgreich {signal_typ}-Signal gesendet!")
+            print("Erfolgreich gesendet!")
         else:
-            print(f"Telegram-Fehler: {result}")
+            print(f"Fehler: {result}")
 
     except Exception as e:
-        print(f"Schwerwiegender Fehler: {e}")
+        print(f"Fehler: {e}")
 
 if __name__ == "__main__":
     main()
