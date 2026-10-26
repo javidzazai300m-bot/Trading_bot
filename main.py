@@ -4,7 +4,7 @@ import yfinance as yf
 
 # --- KONFIGURATION ---
 TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
-CHAT_ID = "655163158"
+CHAT_ID = "6551623158"
 SYMBOL = "GC=F"  # Gold (XAU/USD über Yahoo Finance)
 RSI_PERIOD = 14
 
@@ -57,7 +57,7 @@ def main():
     print(f"Aktueller Kurs: {price:.2f} | RSI: {rsi:.1f}")
 
     # --- BEISPIEL-LOGIK FÜR SIGNALE ---
-    # SELL Signal bei RSI über 70 (oder passe die Schwelle an z.B. 65 an)
+    # SELL Signal bei RSI über 65
     if rsi >= 65:
         entry_low = round(price - 1.0, 2)
         entry_high = round(price + 1.0, 2)
@@ -76,7 +76,7 @@ def main():
         )
         send_telegram_message(message)
 
-    # BUY Signal bei RSI unter 35 (oder passe die Schwelle an z.B. 35 an)
+    # BUY Signal bei RSI unter 35
     elif rsi <= 35:
         entry_low = round(price - 1.0, 2)
         entry_high = round(price + 1.0, 2)
