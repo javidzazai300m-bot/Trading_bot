@@ -2,9 +2,8 @@ name: Trading Signal Bot
 
 on:
   schedule:
-    # Führt das Skript jetzt alle 15 Minuten aus
     - cron: '*/15 * * * *'
-  workflow_dispatch: # Erlaubt weiterhin das manuelle Starten per Button
+  workflow_dispatch:
 
 jobs:
   run-bot:
