@@ -24,14 +24,14 @@ def send_telegram_message(message):
 def main():
     print("🔄 Starte Kursabfrage...")
     try:
-        # 1. Kurs von Yahoo holen
+        # 1. Kurs von Yahoo holen (Stunden- oder Tagesbasis empfohlen für stabile Indikatoren)
         ticker = yf.Ticker(SYMBOL)
-        data = ticker.history(period="1d", interval="1m")
+        data = ticker.history(period="5d", interval="1h")
         
         if data.empty:
             print("⚠️ GC=F liefert keine Daten, versuche XAUUSD=X...")
             ticker = yf.Ticker("XAUUSD=X")
-            data = ticker.history(period="1d", interval="1m")
+            data = ticker.history(period="5d", interval="1h")
 
         if data.empty:
             print("❌ Fehler: Konnte absolut keine Kursdaten abrufen (Möglicherweise Börsen geschlossen).")
@@ -43,9 +43,18 @@ def main():
         aktueller_kurs = roher_kurs + PREIS_KORREKTUR
         print(f"✅ Kurs erfolgreich abgerufen: Roh={roher_kurs}, Korrigiert={aktueller_kurs}")
         
-        # 3. Signal-Logik (Hinweis: RSI ist hier noch statisch auf 55 gesetzt)
-        rsi_wert = 55.0  
+        # 3. Dynamischen RSI berechnen (Standard-Periode: 14)
+        delta = data['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        
+        rs = gain / loss
+        rsi_series = 100 - (100 / (1 + rs))
+        rsi_wert = float(rsi_series.iloc[-1])
+        
+        print(f"📊 Berechneter RSI: {rsi_wert:.2f}")
 
+        # 4. Echte Signal-Logik (Wechselt jetzt je nach RSI zwischen BUY und SELL)
         if rsi_wert >= 50:
             emoji = "🔴"
             aktion_text = "SELL (VERKAUFEN)"
@@ -61,7 +70,7 @@ def main():
             take_profit = aktueller_kurs + 10.0
             stop_loss = aktueller_kurs - 10.0
 
-        # 4. Nachricht zusammenbauen
+        # 5. Nachricht zusammenbauen
         nachricht = (
             f"{emoji} **TRADING SIGNAL** {emoji}\n\n"
             f"• Asset: Gold (XAU/USD)\n"
@@ -70,10 +79,10 @@ def main():
             f"🎯 Einstieg: Ab {einstieg_min:.1f} bis {einstieg_max:.1f}\n"
             f"🎯 Take-Profit (Ziel): {take_profit:.1f}\n"
             f"🛡️ Stop-Loss (Absicherung): {stop_loss:.1f}\n\n"
-            f"📊 RSI: {rsi_wert}"
+            f"📊 RSI: {rsi_wert:.2f}"
         )
 
-        # 5. Senden
+        # 6. Senden
         result = send_telegram_message(nachricht)
         if result.get("ok"):
             print("🚀 Nachricht erfolgreich an Telegram gesendet!")
