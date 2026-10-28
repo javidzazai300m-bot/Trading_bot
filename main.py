@@ -25,21 +25,21 @@ def send_telegram_message(message):
 def main():
     print("🔄 Starte Kursabfrage...")
     try:
-        # 1. Kurs von Yahoo holen (Tages- oder Stundenbasis)
+        # 1. Kurs von Yahoo holen (Für kurzfristigen Handel besser 1m oder 5m Intervall testen)
         ticker = yf.Ticker(SYMBOL)
-        data = ticker.history(period="7d", interval="1h")
+        data = ticker.history(period="1d", interval="5m")
         
         if data.empty:
             print("⚠️ GC=F liefert keine Daten, versuche XAUUSD=X...")
             ticker = yf.Ticker("XAUUSD=X")
-            data = ticker.history(period="7d", interval="1h")
+            data = ticker.history(period="1d", interval="5m")
 
         if data.empty:
             print("❌ Fehler: Konnte absolut keine Kursdaten abrufen.")
             send_telegram_message("⚠️ **Bot-Fehler:** Konnte keine Kursdaten von Yahoo Finance abrufen.")
             return
 
-        # Zeitzonen-Awareness entfernen, falls vorhanden, um Fehler zu vermeiden
+        # Zeitzonen-Awareness entfernen
         if data.index.tz is not None:
             data.index = data.index.tz_convert(None)
 
@@ -56,7 +56,6 @@ def main():
         gain = delta.clip(lower=0)
         loss = -delta.clip(upper=0)
         
-        # Exponentieller gleitender Durchschnitt (Standard für RSI)
         avg_gain = gain.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
         avg_loss = loss.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
         
@@ -66,21 +65,25 @@ def main():
         
         print(f"📊 Berechneter RSI: {rsi_wert:.2f}")
 
-        # 3. Signal-Logik
-        if rsi_wert >= 50:
+        # 3. Verbesserte Signal-Logik (Kein sinnloses Feuern mehr bei RSI 50!)
+        # Ein Signal wird nur noch bei echter Überkauft-/Überverkauft-Lage gesendet.
+        if rsi_wert >= 68:
             emoji = "🔴"
             aktion_text = "SELL (VERKAUFEN)"
             einstieg_min = aktueller_kurs - 1.0
             einstieg_max = aktueller_kurs + 1.0
             take_profit = aktueller_kurs - 10.0
             stop_loss = aktueller_kurs + 10.0
-        else:
+        elif rsi_wert <= 32:
             emoji = "🟢"
             aktion_text = "BUY (KAUFEN)"
             einstieg_min = aktueller_kurs - 1.0
             einstieg_max = aktueller_kurs + 1.0
             take_profit = aktueller_kurs + 10.0
             stop_loss = aktueller_kurs - 10.0
+        else:
+            print(f"⚖️ RSI liegt bei {rsi_wert:.2f} (Neutraler Bereich). Kein Signal gesendet.")
+            return
 
         # 4. Nachricht zusammenbauen
         nachricht = (
