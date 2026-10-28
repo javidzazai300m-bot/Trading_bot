@@ -1,5 +1,6 @@
 import requests
 import yfinance as yf
+import pandas as pd
 
 # --- KONFIGURATION ---
 TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
@@ -24,37 +25,48 @@ def send_telegram_message(message):
 def main():
     print("🔄 Starte Kursabfrage...")
     try:
-        # 1. Kurs von Yahoo holen (Stunden- oder Tagesbasis empfohlen für stabile Indikatoren)
+        # 1. Kurs von Yahoo holen (Tages- oder Stundenbasis)
         ticker = yf.Ticker(SYMBOL)
-        data = ticker.history(period="5d", interval="1h")
+        data = ticker.history(period="7d", interval="1h")
         
         if data.empty:
             print("⚠️ GC=F liefert keine Daten, versuche XAUUSD=X...")
             ticker = yf.Ticker("XAUUSD=X")
-            data = ticker.history(period="5d", interval="1h")
+            data = ticker.history(period="7d", interval="1h")
 
         if data.empty:
-            print("❌ Fehler: Konnte absolut keine Kursdaten abrufen (Möglicherweise Börsen geschlossen).")
+            print("❌ Fehler: Konnte absolut keine Kursdaten abrufen.")
             send_telegram_message("⚠️ **Bot-Fehler:** Konnte keine Kursdaten von Yahoo Finance abrufen.")
             return
 
-        # 2. Rohpreis holen und Korrektur anrechnen
-        roher_kurs = float(data['Close'].iloc[-1])
+        # Zeitzonen-Awareness entfernen, falls vorhanden, um Fehler zu vermeiden
+        if data.index.tz is not None:
+            data.index = data.index.tz_convert(None)
+
+        # Letzte gültige Zeile ermitteln
+        letzte_zeile = data.iloc[-1]
+        letzte_zeit = data.index[-1]
+        roher_kurs = float(letzte_zeile['Close'])
         aktueller_kurs = roher_kurs + PREIS_KORREKTUR
-        print(f"✅ Kurs erfolgreich abgerufen: Roh={roher_kurs}, Korrigiert={aktueller_kurs}")
         
-        # 3. Dynamischen RSI berechnen (Standard-Periode: 14)
+        print(f"✅ Letzte Kerze von: {letzte_zeit} | Roh={roher_kurs}, Korrigiert={aktueller_kurs}")
+        
+        # 2. Sauberer RSI (Wilder's Smoothing Methode)
         delta = data['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
         
-        rs = gain / loss
+        # Exponentieller gleitender Durchschnitt (Standard für RSI)
+        avg_gain = gain.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+        
+        rs = avg_gain / avg_loss
         rsi_series = 100 - (100 / (1 + rs))
         rsi_wert = float(rsi_series.iloc[-1])
         
         print(f"📊 Berechneter RSI: {rsi_wert:.2f}")
 
-        # 4. Echte Signal-Logik (Wechselt jetzt je nach RSI zwischen BUY und SELL)
+        # 3. Signal-Logik
         if rsi_wert >= 50:
             emoji = "🔴"
             aktion_text = "SELL (VERKAUFEN)"
@@ -70,7 +82,7 @@ def main():
             take_profit = aktueller_kurs + 10.0
             stop_loss = aktueller_kurs - 10.0
 
-        # 5. Nachricht zusammenbauen
+        # 4. Nachricht zusammenbauen
         nachricht = (
             f"{emoji} **TRADING SIGNAL** {emoji}\n\n"
             f"• Asset: Gold (XAU/USD)\n"
@@ -82,7 +94,7 @@ def main():
             f"📊 RSI: {rsi_wert:.2f}"
         )
 
-        # 6. Senden
+        # 5. Senden
         result = send_telegram_message(nachricht)
         if result.get("ok"):
             print("🚀 Nachricht erfolgreich an Telegram gesendet!")
