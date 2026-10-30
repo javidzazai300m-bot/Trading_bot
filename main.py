@@ -2,11 +2,14 @@ import requests
 import yfinance as yf
 import pandas as pd
 
-# --- KONFIGURATION ---
+# --- KONFIGURATION (Mit Ihren echten Daten) ---
 TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
 CHAT_ID = "6551623158"
 SYMBOL = "GC=F"
 PREIS_KORREKTUR = -14.0 
+
+# HINWEIS: Auf True setzen, wenn Sie testen wollen, ob Telegram sofort Nachrichten sendet (unabhängig vom RSI)
+TEST_MODUS = False 
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -25,7 +28,7 @@ def send_telegram_message(message):
 def main():
     print("🔄 Starte Kursabfrage...")
     try:
-        # 1. Kurs von Yahoo holen (Für kurzfristigen Handel besser 1m oder 5m Intervall testen)
+        # 1. Kurs von Yahoo holen
         ticker = yf.Ticker(SYMBOL)
         data = ticker.history(period="1d", interval="5m")
         
@@ -65,9 +68,15 @@ def main():
         
         print(f"📊 Berechneter RSI: {rsi_wert:.2f}")
 
-        # 3. Verbesserte Signal-Logik (Kein sinnloses Feuern mehr bei RSI 50!)
-        # Ein Signal wird nur noch bei echter Überkauft-/Überverkauft-Lage gesendet.
-        if rsi_wert >= 68:
+        # 3. Signal-Logik (oder Test-Modus)
+        if TEST_MODUS:
+            emoji = "🔵"
+            aktion_text = "TEST SIGNAL (ERZWUNGEN)"
+            einstieg_min = aktueller_kurs - 1.0
+            einstieg_max = aktueller_kurs + 1.0
+            take_profit = aktueller_kurs + 10.0
+            stop_loss = aktueller_kurs - 10.0
+        elif rsi_wert >= 68:
             emoji = "🔴"
             aktion_text = "SELL (VERKAUFEN)"
             einstieg_min = aktueller_kurs - 1.0
