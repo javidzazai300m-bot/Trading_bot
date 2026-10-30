@@ -1,27 +1,26 @@
-name: Trading Signal Bot
+name: Automated Trading Signal Bot
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
-  workflow_dispatch:
+    - cron: '0 8,14,20 * * *'  # Läuft 3x täglich automatisch
+  workflow_dispatch: # Ermöglicht den manuellen Start über GitHub
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Code auschecken
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Python einrichten
-        uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Abhängigkeiten installieren
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests yfinance pandas
+          pip install requests yfinance
 
-      - name: Skript ausführen
-        run: python main.py
+      - name: Run trading bot
+        run: python bot.py
