@@ -2,14 +2,11 @@ import requests
 import yfinance as yf
 import pandas as pd
 
-# --- KONFIGURATION (Mit Ihren echten Daten) ---
+# --- KONFIGURATION ---
 TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
 CHAT_ID = "6551623158"
 SYMBOL = "GC=F"
 PREIS_KORREKTUR = -14.0 
-
-# HINWEIS: Auf True setzen, wenn Sie testen wollen, ob Telegram sofort Nachrichten sendet (unabhängig vom RSI)
-TEST_MODUS = False 
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -54,59 +51,26 @@ def main():
         
         print(f"✅ Letzte Kerze von: {letzte_zeit} | Roh={roher_kurs}, Korrigiert={aktueller_kurs}")
         
-        # 2. Sauberer RSI (Wilder's Smoothing Methode)
-        delta = data['Close'].diff()
-        gain = delta.clip(lower=0)
-        loss = -delta.clip(upper=0)
-        
-        avg_gain = gain.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
-        avg_loss = loss.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
-        
-        rs = avg_gain / avg_loss
-        rsi_series = 100 - (100 / (1 + rs))
-        rsi_wert = float(rsi_series.iloc[-1])
-        
-        print(f"📊 Berechneter RSI: {rsi_wert:.2f}")
+        # 2. Feste Signal-Parameter ohne RSI-Abhängigkeit
+        emoji = "🔵"
+        aktion_text = "MARKT-UPDATE & SETUP"
+        einstieg_min = aktueller_kurs - 1.0
+        einstieg_max = aktueller_kurs + 1.0
+        take_profit = aktueller_kurs + 10.0
+        stop_loss = aktueller_kurs - 10.0
 
-        # 3. Signal-Logik (oder Test-Modus)
-        if TEST_MODUS:
-            emoji = "🔵"
-            aktion_text = "TEST SIGNAL (ERZWUNGEN)"
-            einstieg_min = aktueller_kurs - 1.0
-            einstieg_max = aktueller_kurs + 1.0
-            take_profit = aktueller_kurs + 10.0
-            stop_loss = aktueller_kurs - 10.0
-        elif rsi_wert >= 68:
-            emoji = "🔴"
-            aktion_text = "SELL (VERKAUFEN)"
-            einstieg_min = aktueller_kurs - 1.0
-            einstieg_max = aktueller_kurs + 1.0
-            take_profit = aktueller_kurs - 10.0
-            stop_loss = aktueller_kurs + 10.0
-        elif rsi_wert <= 32:
-            emoji = "🟢"
-            aktion_text = "BUY (KAUFEN)"
-            einstieg_min = aktueller_kurs - 1.0
-            einstieg_max = aktueller_kurs + 1.0
-            take_profit = aktueller_kurs + 10.0
-            stop_loss = aktueller_kurs - 10.0
-        else:
-            print(f"⚖️ RSI liegt bei {rsi_wert:.2f} (Neutraler Bereich). Kein Signal gesendet.")
-            return
-
-        # 4. Nachricht zusammenbauen
+        # 3. Nachricht zusammenbauen
         nachricht = (
-            f"{emoji} **TRADING SIGNAL** {emoji}\n\n"
+            f"{emoji} **GOLD TRADING SETUP** {emoji}\n\n"
             f"• Asset: Gold (XAU/USD)\n"
             f"• Aktueller Kurs: {aktueller_kurs:.2f}\n"
-            f"• Aktion: {emoji} {aktion_text}\n\n"
+            f"• Aktion: {aktion_text}\n\n"
             f"🎯 Einstieg: Ab {einstieg_min:.1f} bis {einstieg_max:.1f}\n"
             f"🎯 Take-Profit (Ziel): {take_profit:.1f}\n"
-            f"🛡️ Stop-Loss (Absicherung): {stop_loss:.1f}\n\n"
-            f"📊 RSI: {rsi_wert:.2f}"
+            f"🛡️ Stop-Loss (Absicherung): {stop_loss:.1f}"
         )
 
-        # 5. Senden
+        # 4. Senden
         result = send_telegram_message(nachricht)
         if result.get("ok"):
             print("🚀 Nachricht erfolgreich an Telegram gesendet!")
