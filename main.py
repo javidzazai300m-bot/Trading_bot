@@ -23,9 +23,9 @@ def send_telegram_message(message):
         return {}
 
 def main():
-    print("🔄 Starte Kursabfrage (15-Minuten-Intervall)...")
+    print("🔄 Starte Kursabfrage im 15-Minuten-Takt (ohne RSI)...")
     try:
-        # 1. Kurs von Yahoo holen mit 15-Minuten-Intervall
+        # 1. Kurs von Yahoo holen (15-Minuten-Intervall)
         ticker = yf.Ticker(SYMBOL)
         data = ticker.history(period="1d", interval="15m")
         
@@ -43,11 +43,12 @@ def main():
         if data.index.tz is not None:
             data.index = data.index.tz_convert(None)
 
-        # Letzte und vorherige Zeile ermitteln, um die Richtung (BUY/SELL) zu bestimmen
+        # Prüfen, ob genügend Daten für den Vergleich da sind
         if len(data) < 2:
-            print("❌ Fehler: Nicht genügend Datenpunkte für den Vergleich.")
+            print("❌ Fehler: Nicht genügend Datenpunkte für den Trendvergleich.")
             return
 
+        # Letzte und vorherige Zeile ermitteln
         letzte_zeile = data.iloc[-1]
         vorherige_zeile = data.iloc[-2]
         letzte_zeit = data.index[-1]
@@ -58,7 +59,7 @@ def main():
         
         print(f"✅ Letzte Kerze von: {letzte_zeit} | Roh={roher_kurs}, Korrigiert={aktueller_kurs}")
         
-        # 2. Dynamische Signal-Bestimmung (BUY wenn Kurs steigt, SELL wenn Kurs fällt im 15m-Takt)
+        # 2. Reine Trend-Logik (Steigt der Kurs -> BUY, Fällt er -> SELL)
         if roher_kurs >= vorheriger_schluss:
             emoji = "🔵"
             aktion_text = "BUY (KAUFEN)"
@@ -85,7 +86,7 @@ def main():
             f"🛡️ Stop-Loss (Absicherung): {stop_loss:.1f}"
         )
 
-        # 4. Senden
+        # 4. Senden an Telegram
         result = send_telegram_message(nachricht)
         if result.get("ok"):
             print("🚀 Nachricht erfolgreich an Telegram gesendet!")
