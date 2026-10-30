@@ -6,7 +6,7 @@ import pandas as pd
 TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
 CHAT_ID = "6551623158"
 SYMBOL = "GC=F"
-PREIS_KORREKTUR = -18.0 
+PREIS_KORREKTUR = -10.0 
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
