@@ -23,4 +23,4 @@ jobs:
           pip install requests yfinance
 
       - name: Run trading bot
-        run: python bot.py
+        run: python main.py
