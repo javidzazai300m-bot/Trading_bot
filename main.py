@@ -23,16 +23,16 @@ def send_telegram_message(message):
         return {}
 
 def main():
-    print("🔄 Starte Kursabfrage...")
+    print("🔄 Starte Kursabfrage (15-Minuten-Intervall)...")
     try:
-        # 1. Kurs von Yahoo holen
+        # 1. Kurs von Yahoo holen mit 15-Minuten-Intervall
         ticker = yf.Ticker(SYMBOL)
-        data = ticker.history(period="1d", interval="5m")
+        data = ticker.history(period="1d", interval="15m")
         
         if data.empty:
             print("⚠️ GC=F liefert keine Daten, versuche XAUUSD=X...")
             ticker = yf.Ticker("XAUUSD=X")
-            data = ticker.history(period="1d", interval="5m")
+            data = ticker.history(period="1d", interval="15m")
 
         if data.empty:
             print("❌ Fehler: Konnte absolut keine Kursdaten abrufen.")
@@ -43,25 +43,40 @@ def main():
         if data.index.tz is not None:
             data.index = data.index.tz_convert(None)
 
-        # Letzte gültige Zeile ermitteln
+        # Letzte und vorherige Zeile ermitteln, um die Richtung (BUY/SELL) zu bestimmen
+        if len(data) < 2:
+            print("❌ Fehler: Nicht genügend Datenpunkte für den Vergleich.")
+            return
+
         letzte_zeile = data.iloc[-1]
+        vorherige_zeile = data.iloc[-2]
         letzte_zeit = data.index[-1]
+        
         roher_kurs = float(letzte_zeile['Close'])
+        vorheriger_schluss = float(vorherige_zeile['Close'])
         aktueller_kurs = roher_kurs + PREIS_KORREKTUR
         
         print(f"✅ Letzte Kerze von: {letzte_zeit} | Roh={roher_kurs}, Korrigiert={aktueller_kurs}")
         
-        # 2. Feste Signal-Parameter ohne RSI-Abhängigkeit
-        emoji = "🔵"
-        aktion_text = "MARKT-UPDATE & SETUP"
-        einstieg_min = aktueller_kurs - 1.0
-        einstieg_max = aktueller_kurs + 1.0
-        take_profit = aktueller_kurs + 10.0
-        stop_loss = aktueller_kurs - 10.0
+        # 2. Dynamische Signal-Bestimmung (BUY wenn Kurs steigt, SELL wenn Kurs fällt im 15m-Takt)
+        if roher_kurs >= vorheriger_schluss:
+            emoji = "🔵"
+            aktion_text = "BUY (KAUFEN)"
+            einstieg_min = aktueller_kurs - 1.0
+            einstieg_max = aktueller_kurs + 1.0
+            take_profit = aktueller_kurs + 10.0
+            stop_loss = aktueller_kurs - 5.0
+        else:
+            emoji = "🔴"
+            aktion_text = "SELL (VERKAUFEN)"
+            einstieg_min = aktueller_kurs - 1.0
+            einstieg_max = aktueller_kurs + 1.0
+            take_profit = aktueller_kurs - 10.0
+            stop_loss = aktueller_kurs + 5.0
 
-        # 3. Nachricht zusammenbauen
+        # 3. Nachricht zusammenbauen mit klarer Einstiegsspanne
         nachricht = (
-            f"{emoji} **GOLD TRADING SETUP** {emoji}\n\n"
+            f"{emoji} **GOLD TRADING SIGNAL** {emoji}\n\n"
             f"• Asset: Gold (XAU/USD)\n"
             f"• Aktueller Kurs: {aktueller_kurs:.2f}\n"
             f"• Aktion: {aktion_text}\n\n"
