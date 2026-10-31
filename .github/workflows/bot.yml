@@ -1,26 +1,24 @@
-name: Automated Trading Signal Bot
+name: Gold M15 Signal Bot
 
 on:
   schedule:
-    - cron: '0 8,14,20 * * *'  # Läuft 3x täglich automatisch
-  workflow_dispatch: # Ermöglicht den manuellen Start über GitHub
+    - cron: '*/15 * * * *'  # Läuft alle 15 Minuten vollautomatisch
+  workflow_dispatch:        # Erlaubt manuelles Testen per Klick
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Code auschecken
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Python einrichten
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests yfinance
+      - name: Pakete installieren
+        run: pip install -r requirements.txt
 
-      - name: Run trading bot
+      - name: Bot ausführen
         run: python main.py
