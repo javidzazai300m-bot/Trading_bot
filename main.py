@@ -8,9 +8,13 @@ SYMBOL = "GC=F"   # Gold-Futures (XAUUSD)
 TIMEFRAME = "15m" # M15 Zeitrahmen
 EMA_PERIOD = 12
 
-# Deine Zugangsdaten direkt eingetragen:
+# Feste Zugangsdaten
 TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
 TELEGRAM_CHAT_ID = "6551623158"
+
+# Prozentuale Abstände für SL (0.2%) und TP (0.45%)
+SL_PERCENT = 0.002
+TP_PERCENT = 0.0045
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -51,19 +55,32 @@ def check_gold_signal():
 
     # Signallogik (Crossover)
     if prev_close <= prev_ema and current_close > current_ema:
+        # BUY: SL liegt darunter, TP darüber
+        sl = current_close * (1 - SL_PERCENT)
+        tp = current_close * (1 + TP_PERCENT)
+        
         msg = (
-            f"🚀 **GOLD (XAUUSD) KAUFSIGNAL (BUY)**\n\n"
+            f"🟢 **GOLD (XAUUSD) KAUFSIGNAL (BUY)**\n\n"
             f"⏱ **Zeitrahmen:** M15\n"
-            f"💰 **Kurs:** `{current_close:.2f}` $\n"
-            f"📊 **EMA(12):** `{current_ema:.2f}` $"
+            f"💰 **Einstieg / Kurs:** `{current_close:.2f} $`\n"
+            f"🛑 **Stop-Loss (SL):** `{sl:.2f} $`\n"
+            f"🎯 **Take-Profit (TP):** `{tp:.2f} $`\n"
+            f"📊 **EMA(12):** `{current_ema:.2f} $`"
         )
         send_telegram_message(msg)
+        
     elif prev_close >= prev_ema and current_close < current_ema:
+        # SELL: SL liegt darüber, TP darunter
+        sl = current_close * (1 + SL_PERCENT)
+        tp = current_close * (1 - TP_PERCENT)
+        
         msg = (
-            f"📉 **GOLD (XAUUSD) VERKAUFSIGNAL (SELL)**\n\n"
+            f"🔴 **GOLD (XAUUSD) VERKAUFSIGNAL (SELL)**\n\n"
             f"⏱ **Zeitrahmen:** M15\n"
-            f"💰 **Kurs:** `{current_close:.2f}` $\n"
-            f"📊 **EMA(12):** `{current_ema:.2f}` $"
+            f"💰 **Einstieg / Kurs:** `{current_close:.2f} $`\n"
+            f"🛑 **Stop-Loss (SL):** `{sl:.2f} $`\n"
+            f"🎯 **Take-Profit (TP):** `{tp:.2f} $`\n"
+            f"📊 **EMA(12):** `{current_ema:.2f} $`"
         )
         send_telegram_message(msg)
     else:
