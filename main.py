@@ -34,53 +34,74 @@ def send_telegram_message(message):
 
 def check_gold_signal():
     print("Prüfe Gold (XAUUSD) auf M15...")
-    data = yf.download(SYMBOL, period="2d", interval=TIMEFRAME, progress=False)
+    
+    # Laden der Daten (nutze 5 Tage, um Lücken bei Wochenenden zu vermeiden)
+    data = yf.download(SYMBOL, period="5d", interval=TIMEFRAME, progress=False)
     
     if data.empty or len(data) < EMA_PERIOD + 2:
-        print("Nicht genügend Daten empfangen.")
+        print(f"Nicht genügend Daten empfangen. Zeilen: {len(data)}")
         return
 
+    # WICHTIG: Korbereinigung für yfinance MultiIndex Spalten
     if isinstance(data.columns, pd.MultiIndex):
-        data.columns = data.columns.get_level_values(0)
+        data.columns = [col[0] for col in data.columns]
+    
+    # Sicherstellen, dass 'Close' existiert
+    if 'Close' not in data.columns:
+        print(f"Fehler: Spalte 'Close' nicht gefunden. Vorhandene Spalten: {data.columns}")
+        return
 
     # 12-EMA berechnen
     data['EMA'] = data['Close'].ewm(span=EMA_PERIOD, adjust=False).mean()
     
-    current_close = float(data['Close'].iloc[-1])
-    current_ema = float(data['EMA'].iloc[-1])
+    # Wir nehmen die letzten beiden GESCHLOSSENEN Kerzen (-2 und -3) oder die aktuellen (-1 und -2)
+    # Empfehlung für Crossover: Auf die letzte abgeschlossene Kerze (-2) prüfen, 
+    # um Fehlsignale durch zuckende Live-Kurse (-1) zu vermeiden.
     prev_close = float(data['Close'].iloc[-2])
     prev_ema = float(data['EMA'].iloc[-2])
+    current_close = float(data['Close'].iloc[-3])
+    current_ema = float(data['EMA'].iloc[-3])
 
-    print(f"Aktueller Kurs: {current_close:.2f} | EMA(12): {current_ema:.2f}")
+    print(f"Letzte geschlossene Kerze - Close: {prev_close:.2f} | EMA(12): {prev_ema:.2f}")
 
-    # Signallogik (Crossover)
-    if prev_close <= prev_ema and current_close > current_ema:
-        # BUY: SL liegt darunter, TP darüber
-        sl = current_close * (1 - SL_PERCENT)
-        tp = current_close * (1 + TP_PERCENT)
+    # Signallogik (Crossover auf Basis der letzten geschlossenen Kerze)
+    # Wenn vorher unter dem EMA und jetzt darüber -> BUY
+    # (Hinweis: Bei umgekehrter Indexierung von -3 zu -2 vergleicht man den Übergang)
+    
+    # Sauberer Vergleich mit -2 (aktuell) und -3 (vorheriger Tick)
+    c_close = float(data['Close'].iloc[-1])
+    c_ema = float(data['EMA'].iloc[-1])
+    p_close = float(data['Close'].iloc[-2])
+    p_ema = float(data['EMA'].iloc[-2])
+
+    print(f"Aktueller Kurs: {c_close:.2f} | EMA: {c_ema:.2f}")
+    print(f"Vorheriger Kurs: {p_close:.2f} | EMA: {p_ema:.2f}")
+
+    if p_close <= p_ema and c_close > c_ema:
+        sl = c_close * (1 - SL_PERCENT)
+        tp = c_close * (1 + TP_PERCENT)
         
         msg = (
             f"🟢 **GOLD (XAUUSD) KAUFSIGNAL (BUY)**\n\n"
             f"⏱ **Zeitrahmen:** M15\n"
-            f"💰 **Einstieg / Kurs:** `{current_close:.2f} $`\n"
+            f"💰 **Einstieg / Kurs:** `{c_close:.2f} $`\n"
             f"🛑 **Stop-Loss (SL):** `{sl:.2f} $`\n"
             f"🎯 **Take-Profit (TP):** `{tp:.2f} $`\n"
-            f"📊 **EMA(12):** `{current_ema:.2f} $`"
+            f"📊 **EMA(12):** `{c_ema:.2f} $`"
         )
         send_telegram_message(msg)
         
-    elif prev_close >= prev_ema and current_close < current_ema:
-        # SELL: SL liegt darüber, TP darunter
-        sl = current_close * (1 + SL_PERCENT)
-        tp = current_close * (1 - TP_PERCENT)
+    elif p_close >= p_ema and c_close < c_ema:
+        sl = c_close * (1 + SL_PERCENT)
+        tp = c_close * (1 - TP_PERCENT)
         
         msg = (
             f"🔴 **GOLD (XAUUSD) VERKAUFSIGNAL (SELL)**\n\n"
             f"⏱ **Zeitrahmen:** M15\n"
-            f"💰 **Einstieg / Kurs:** `{current_close:.2f} $`\n"
+            f"💰 **Einstieg / Kurs:** `{c_close:.2f} $`\n"
             f"🛑 **Stop-Loss (SL):** `{sl:.2f} $`\n"
             f"🎯 **Take-Profit (TP):** `{tp:.2f} $`\n"
-            f"📊 **EMA(12):** `{current_ema:.2f} $`"
+            f"📊 **EMA(12):** `{c_ema:.2f} $`"
         )
         send_telegram_message(msg)
     else:
