@@ -26,7 +26,7 @@ def send_telegram_message(message):
     try:
         response = requests.post(url, json=payload)
         if response.status_code == 200:
-            print("Telegram-Signal erfolgreich gesendet!")
+            print("Telegram-Nachricht erfolgreich gesendet!")
         else:
             print(f"Fehler beim Senden: {response.text}")
     except Exception as e:
@@ -35,14 +35,18 @@ def send_telegram_message(message):
 def check_gold_signal():
     print("Prüfe Gold (XAUUSD) auf M15...")
     
+    # Test-Nachricht beim Start, damit du siehst, dass der Bot aktiv läuft
+    send_telegram_message("🤖 *Javidtradingbot:* GitHub Action gestartet – Prüfe M15 Gold...")
+
     # Laden der Daten (nutze 5 Tage, um Lücken bei Wochenenden zu vermeiden)
     data = yf.download(SYMBOL, period="5d", interval=TIMEFRAME, progress=False)
     
     if data.empty or len(data) < EMA_PERIOD + 2:
         print(f"Nicht genügend Daten empfangen. Zeilen: {len(data)}")
+        send_telegram_message("⚠️ *Achtung:* Nicht genügend Marktdaten von yfinance empfangen.")
         return
 
-    # WICHTIG: Korbereinigung für yfinance MultiIndex Spalten
+    # WICHTIG: Korrekturbereinigung für yfinance MultiIndex Spalten
     if isinstance(data.columns, pd.MultiIndex):
         data.columns = [col[0] for col in data.columns]
     
@@ -54,21 +58,7 @@ def check_gold_signal():
     # 12-EMA berechnen
     data['EMA'] = data['Close'].ewm(span=EMA_PERIOD, adjust=False).mean()
     
-    # Wir nehmen die letzten beiden GESCHLOSSENEN Kerzen (-2 und -3) oder die aktuellen (-1 und -2)
-    # Empfehlung für Crossover: Auf die letzte abgeschlossene Kerze (-2) prüfen, 
-    # um Fehlsignale durch zuckende Live-Kurse (-1) zu vermeiden.
-    prev_close = float(data['Close'].iloc[-2])
-    prev_ema = float(data['EMA'].iloc[-2])
-    current_close = float(data['Close'].iloc[-3])
-    current_ema = float(data['EMA'].iloc[-3])
-
-    print(f"Letzte geschlossene Kerze - Close: {prev_close:.2f} | EMA(12): {prev_ema:.2f}")
-
-    # Signallogik (Crossover auf Basis der letzten geschlossenen Kerze)
-    # Wenn vorher unter dem EMA und jetzt darüber -> BUY
-    # (Hinweis: Bei umgekehrter Indexierung von -3 zu -2 vergleicht man den Übergang)
-    
-    # Sauberer Vergleich mit -2 (aktuell) und -3 (vorheriger Tick)
+    # Aktuelle und vorherige Kerzenwerte holen
     c_close = float(data['Close'].iloc[-1])
     c_ema = float(data['EMA'].iloc[-1])
     p_close = float(data['Close'].iloc[-2])
@@ -77,6 +67,7 @@ def check_gold_signal():
     print(f"Aktueller Kurs: {c_close:.2f} | EMA: {c_ema:.2f}")
     print(f"Vorheriger Kurs: {p_close:.2f} | EMA: {p_ema:.2f}")
 
+    # Signallogik
     if p_close <= p_ema and c_close > c_ema:
         sl = c_close * (1 - SL_PERCENT)
         tp = c_close * (1 + TP_PERCENT)
@@ -106,6 +97,9 @@ def check_gold_signal():
         send_telegram_message(msg)
     else:
         print("Kein neues Signal im M15-Zeitrahmen.")
+        # Optional: Falls du bei jedem Durchlauf wissen willst, dass er fertig ist,
+        # kannst du die Zeile unten auskommentieren.
+        # send_telegram_message("ℹ️ Bot-Lauf beendet: Kein neues Signal im M15 Chart.")
 
 if __name__ == "__main__":
     check_gold_signal()
