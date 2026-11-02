@@ -1,22 +1,24 @@
 import os
+import sys
 import requests
 import pandas as pd
 import yfinance as yf
 
 # --- Konfiguration ---
-SYMBOL = "GC=F"   # Gold-Futures (XAUUSD)
-TIMEFRAME = "15m" # M15 Zeitrahmen
-EMA_PERIOD = 12
+SYMBOL = "GC=F"       # Gold-Futures (XAUUSD)
+TIMEFRAME = "15m"     # M15 Zeitrahmen
+EMA_PERIOD = 12       # EMA Periode
 
-# Feste Zugangsdaten
+# Feste Zugangsdaten (Bot-Token & deine Telegram-ID)
 TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
 TELEGRAM_CHAT_ID = "6551623158"
 
-# Prozentuale Abstände für SL (0.2%) und TP (0.45%)
+# Risikomanagement: Abstände für Stop-Loss (0.2%) und Take-Profit (0.45%)
 SL_PERCENT = 0.002
 TP_PERCENT = 0.0045
 
 def send_telegram_message(message):
+    """Sendet eine formatierte Nachricht an deinen Telegram-Bot."""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -24,46 +26,51 @@ def send_telegram_message(message):
         "parse_mode": "Markdown"
     }
     try:
-        response = requests.post(url, json=payload)
+        response = requests.post(url, json=payload, timeout=10)
         if response.status_code == 200:
-            print("Telegram-Nachricht erfolgreich gesendet!")
+            print("Telegram-Signal erfolgreich gesendet!")
         else:
-            print(f"Fehler beim Senden: {response.text}")
+            print(f"Fehler beim Telegram-Versand: {response.text}")
     except Exception as e:
-        print(f"Netzwerkfehler: {e}")
+        print(f"Netzwerkfehler bei Telegram: {e}")
 
 def check_gold_signal():
-    print("Prüfe Gold (XAUUSD) auf M15...")
+    print(f"Starte Marktanalyse für {SYMBOL} auf Zeitrahmen {TIMEFRAME}...")
     
-    # Laden der Daten (nutze 5 Tage, um Lücken bei Wochenenden zu vermeiden)
-    data = yf.download(SYMBOL, period="5d", interval=TIMEFRAME, progress=False)
-    
-    if data.empty or len(data) < EMA_PERIOD + 2:
-        print(f"Nicht genügend Daten empfangen. Zeilen: {len(data)}")
+    try:
+        # Marktdaten laden (5 Tage, um Wochenenden sicher zu überbrücken)
+        data = yf.download(SYMBOL, period="5d", interval=TIMEFRAME, progress=False)
+    except Exception as e:
+        print(f"Fehler beim Herunterladen der Daten von yfinance: {e}")
         return
 
-    # WICHTIG: Korrekturbereinigung für yfinance MultiIndex Spalten
+    # Prüfen, ob genügend Daten vorhanden sind
+    if data.empty or len(data) < EMA_PERIOD + 5:
+        print(f"Warnung: Zu wenige Kerzen empfangen ({len(data)} Zeilen).")
+        return
+
+    # Bereinigung von yfinance MultiIndex-Spalten (falls vorhanden)
     if isinstance(data.columns, pd.MultiIndex):
         data.columns = [col[0] for col in data.columns]
     
-    # Sicherstellen, dass 'Close' existiert
     if 'Close' not in data.columns:
-        print(f"Fehler: Spalte 'Close' nicht gefunden. Vorhandene Spalten: {data.columns}")
+        print(f"Kritischer Fehler: Spalte 'Close' fehlt in den Daten. Vorhanden: {data.columns}")
         return
 
-    # 12-EMA berechnen
+    # 12er Exponential Moving Average (EMA) berechnen
     data['EMA'] = data['Close'].ewm(span=EMA_PERIOD, adjust=False).mean()
     
-    # Aktuelle und vorherige Kerzenwerte holen
-    c_close = float(data['Close'].iloc[-1])
-    c_ema = float(data['EMA'].iloc[-1])
-    p_close = float(data['Close'].iloc[-2])
-    p_ema = float(data['EMA'].iloc[-2])
+    # Werte der letzten abgeschlossenen Kerzen holen (-2 und -3 zur Vermeidung von Live-Rauschen)
+    c_close = float(data['Close'].iloc[-2])
+    c_ema = float(data['EMA'].iloc[-2])
+    p_close = float(data['Close'].iloc[-3])
+    p_ema = float(data['EMA'].iloc[-3])
 
-    print(f"Aktueller Kurs: {c_close:.2f} | EMA: {c_ema:.2f}")
-    print(f"Vorheriger Kurs: {p_close:.2f} | EMA: {p_ema:.2f}")
+    print(f"Kerze [-2] - Kurs: {c_close:.2f} | EMA: {c_ema:.2f}")
+    print(f"Kerze [-3] - Kurs: {p_close:.2f} | EMA: {p_ema:.2f}")
 
-    # Signallogik
+    # Signallogik: Crossover-Erkennung
+    # KAUFSIGNAL: Vorher unter dem EMA, jetzt darüber
     if p_close <= p_ema and c_close > c_ema:
         sl = c_close * (1 - SL_PERCENT)
         tp = c_close * (1 + TP_PERCENT)
@@ -78,6 +85,7 @@ def check_gold_signal():
         )
         send_telegram_message(msg)
         
+    # VERKAUFSIGNAL: Vorher über dem EMA, jetzt darunter
     elif p_close >= p_ema and c_close < c_ema:
         sl = c_close * (1 + SL_PERCENT)
         tp = c_close * (1 - TP_PERCENT)
@@ -92,7 +100,7 @@ def check_gold_signal():
         )
         send_telegram_message(msg)
     else:
-        print("Kein neues Signal im M15-Zeitrahmen.")
+        print("Kein Crossover-Signal im aktuellen Intervall. Bot bleibt stumm.")
 
 if __name__ == "__main__":
     check_gold_signal()
