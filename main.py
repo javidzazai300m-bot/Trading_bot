@@ -35,15 +35,11 @@ def send_telegram_message(message):
 def check_gold_signal():
     print("Prüfe Gold (XAUUSD) auf M15...")
     
-    # Test-Nachricht beim Start, damit du siehst, dass der Bot aktiv läuft
-    send_telegram_message("🤖 *Javidtradingbot:* GitHub Action gestartet – Prüfe M15 Gold...")
-
     # Laden der Daten (nutze 5 Tage, um Lücken bei Wochenenden zu vermeiden)
     data = yf.download(SYMBOL, period="5d", interval=TIMEFRAME, progress=False)
     
     if data.empty or len(data) < EMA_PERIOD + 2:
         print(f"Nicht genügend Daten empfangen. Zeilen: {len(data)}")
-        send_telegram_message("⚠️ *Achtung:* Nicht genügend Marktdaten von yfinance empfangen.")
         return
 
     # WICHTIG: Korrekturbereinigung für yfinance MultiIndex Spalten
@@ -97,9 +93,6 @@ def check_gold_signal():
         send_telegram_message(msg)
     else:
         print("Kein neues Signal im M15-Zeitrahmen.")
-        # Optional: Falls du bei jedem Durchlauf wissen willst, dass er fertig ist,
-        # kannst du die Zeile unten auskommentieren.
-        # send_telegram_message("ℹ️ Bot-Lauf beendet: Kein neues Signal im M15 Chart.")
 
 if __name__ == "__main__":
     check_gold_signal()
