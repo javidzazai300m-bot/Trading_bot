@@ -13,12 +13,18 @@ def send_telegram_message(message_text):
   payload = {
       "chat_id": TELEGRAM_CHAT_ID,
       "text": message_text,
-      "parse_mode": "Markdown",
+      # parse_mode entfernt, um Markdown-Fehler zu vermeiden
   }
   try:
-    requests.post(url, json=payload)
+    response = requests.post(url, json=payload)
+    # Wichtig: Löst bei HTTP-Fehlern (z.B. 400 Bad Request) einen Fehler aus
+    response.raise_for_status()
+    print("✅ Signal erfolgreich an Telegram gesendet.")
+  except requests.exceptions.HTTPError as err:
+    print(f"❌ Telegram HTTP-Fehler: {err}")
+    print(f"Antwort von Telegram: {response.text}")
   except Exception as e:
-    print(f"Netzwerkfehler: {e}")
+    print(f"❌ Netzwerk- oder unerwarteter Fehler: {e}")
 
 
 def calculate_atr(df, period=14):
@@ -58,19 +64,19 @@ def check_gold_setup():
     if ema_50 > ema_200 and current_price > ema_50:
       trend = "BULLISH 🟢"
       signal = "BUY (LONG)"
-      trade_advice = "JA ✅ (Trend ist Bullish - Jetzt Long traden)"
+      trade_advice = "JA (Trend ist Bullish - Jetzt Long traden)"
       stop_loss = current_price - (1.5 * atr)
       take_profit = current_price + (3.0 * atr)
     elif ema_50 < ema_200 and current_price < ema_50:
       trend = "BEARISH 🔴"
       signal = "SELL (SHORT)"
-      trade_advice = "JA ✅ (Trend ist Bearish - Jetzt Short traden)"
+      trade_advice = "JA (Trend ist Bearish - Jetzt Short traden)"
       stop_loss = current_price + (1.5 * atr)
       take_profit = current_price - (3.0 * atr)
     else:
       trend = "NEUTRAL / SEITWÄRTS 🟡"
       signal = "KEIN TRADE"
-      trade_advice = "NEIN ❌ (Warten auf klaren Trend / Seitwärtsphase)"
+      trade_advice = "NEIN (Warten auf klaren Trend / Seitwärtsphase)"
       stop_loss = 0
       take_profit = 0
 
@@ -99,27 +105,26 @@ def main():
 
   if data:
     current_signal = data["signal"]
+    print(f"Aktuelles Signal ermittelt: {current_signal}")
 
     # Wenn ein echter Trade vorliegt, an Telegram senden
     if current_signal != "KEIN TRADE":
       report = (
-          f"🚨 *NEUES M15 TRADING SIGNAL* 🚨\n"
+          f"🚨 NEUES M15 TRADING SIGNAL 🚨\n"
           f"-----------------------------------\n"
-          f"📊 *Asset:* {data['symbol']} ({data['timeframe']})\n"
-          f"• *Trend:* {data['trend']}\n"
-          f"• *Signal:* *{data['signal']}*\n"
-          f"• *Empfehlung:* ➔ *{data['trade_advice']}*\n\n"
-          f"• *Aktueller Preis (Einstieg):* ${data['price']}\n"
-          f"• *Stop-Loss (SL):* 🛑 ${data['sl']}\n"
-          f"• *Take-Profit (TP):* 🎯 ${data['tp']}\n\n"
-          f"• *EMA 50:* ${data['ema_50']} | *EMA 200:* ${data['ema_200']}\n"
+          f"📊 Asset: {data['symbol']} ({data['timeframe']})\n"
+          f"• Trend: {data['trend']}\n"
+          f"• Signal: {data['signal']}\n"
+          f"• Empfehlung: {data['trade_advice']}\n\n"
+          f"• Aktueller Preis (Einstieg): ${data['price']}\n"
+          f"• Stop-Loss (SL): ${data['sl']}\n"
+          f"• Take-Profit (TP): ${data['tp']}\n\n"
+          f"• EMA 50: ${data['ema_50']} | EMA 200: ${data['ema_200']}\n"
       )
       send_telegram_message(report)
-      print("✅ Signal erfolgreich an Telegram gesendet.")
     else:
       print("ℹ️ Kein klares Trade-Signal (Seitwärtsphase). Keine Nachricht gesendet.")
   else:
-    # Fehler werden nur in den GitHub-Logs ausgegeben, kein Telegram-Spam
     print("⚠️ Warnung: Konnte keine aktuellen Daten abrufen.")
 
 
