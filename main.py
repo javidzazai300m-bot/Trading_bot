@@ -123,6 +123,8 @@ def main():
       send_telegram_message(report)
     else:
       print("ℹ️ Kein klares Trade-Signal (Seitwärtsphase). Keine Nachricht gesendet.")
+      # Wenn du auch bei Seitwärtsphase eine Nachricht willst, entferne das '#' vor der nächsten Zeile:
+      # send_telegram_message("ℹ️ Gold M15 Bot Check: Aktuell kein Signal (Seitwärtsphase).")
   else:
     print("⚠️ Warnung: Konnte keine aktuellen Daten abrufen.")
 
