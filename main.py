@@ -103,30 +103,25 @@ def main():
   data = check_gold_setup()
 
   if data:
-    current_signal = data["signal"]
-    print(f"Aktuelles Signal ermittelt: {current_signal}")
-
-    # Wenn ein echter Trade vorliegt, an Telegram senden
-    if current_signal != "KEIN TRADE":
-      report = (
-          f"🚨 NEUES M15 TRADING SIGNAL 🚨\n"
-          f"-----------------------------------\n"
-          f"📊 Asset: {data['symbol']} ({data['timeframe']})\n"
-          f"• Trend: {data['trend']}\n"
-          f"• Signal: {data['signal']}\n"
-          f"• Empfehlung: {data['trade_advice']}\n\n"
-          f"• Aktueller Preis (Einstieg): ${data['price']}\n"
-          f"• Stop-Loss (SL): ${data['sl']}\n"
-          f"• Take-Profit (TP): ${data['tp']}\n\n"
-          f"• EMA 50: ${data['ema_50']} | EMA 200: ${data['ema_200']}\n"
-      )
-      send_telegram_message(report)
-    else:
-      print("ℹ️ Kein klares Trade-Signal (Seitwärtsphase). Keine Nachricht gesendet.")
-      # Wenn du auch bei Seitwärtsphase eine Nachricht willst, entferne das '#' vor der nächsten Zeile:
-      # send_telegram_message("ℹ️ Gold M15 Bot Check: Aktuell kein Signal (Seitwärtsphase).")
+    # Nachricht wird nun IMMER gesendet, egal ob Signal oder Seitwärtsphase
+    report = (
+        f"🤖 M15 BOT STATUS-UPDATE 🤖\n"
+        f"-----------------------------------\n"
+        f"📊 Asset: {data['symbol']} ({data['timeframe']})\n"
+        f"• Trend: {data['trend']}\n"
+        f"• Signal: {data['signal']}\n"
+        f"• Empfehlung: {data['trade_advice']}\n\n"
+        f"• Aktueller Preis: ${data['price']}\n"
+        f"• Stop-Loss (SL): ${data['sl']}\n"
+        f"• Take-Profit (TP): ${data['tp']}\n\n"
+        f"• EMA 50: ${data['ema_50']} | EMA 200: ${data['ema_200']}\n"
+    )
+    send_telegram_message(report)
   else:
     print("⚠️ Warnung: Konnte keine aktuellen Daten abrufen.")
+    send_telegram_message(
+        "⚠️ Gold M15 Bot: Warnung - Konnte keine Marktdaten abrufen."
+    )
 
 
 if __name__ == "__main__":
