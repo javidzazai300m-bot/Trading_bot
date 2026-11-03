@@ -37,7 +37,9 @@ def calculate_atr(df, period=14):
 
 def check_gold_setup():
   """Analysiert Gold auf dem M15-Timeframe mit EMA & ATR."""
-  ticker_symbol = "GC=F"  # Stabiler Ticker für Gold Futures auf Yahoo Finance
+  ticker_symbol = (
+      "XAUUSD=X"  # Umgestellt auf Spot-Gold für den passenden Broker-Preis
+  )
   interval = "15m"
   period = "30d"  # Ausreichend Daten für den EMA 200
 
@@ -80,7 +82,7 @@ def check_gold_setup():
       take_profit = 0
 
     return {
-        "symbol": "Gold (GC=F)",
+        "symbol": "Gold Spot (XAUUSD=X)",
         "timeframe": "M15",
         "trend": trend,
         "signal": signal,
@@ -103,7 +105,7 @@ def main():
   data = check_gold_setup()
 
   if data:
-    # Nachricht wird nun IMMER gesendet, egal ob Signal oder Seitwärtsphase
+    # Nachricht wird nun IMMER gesendet (alle 15 Minuten)
     report = (
         f"🤖 M15 BOT STATUS-UPDATE 🤖\n"
         f"-----------------------------------\n"
