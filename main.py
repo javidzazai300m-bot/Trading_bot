@@ -13,11 +13,9 @@ def send_telegram_message(message_text):
   payload = {
       "chat_id": TELEGRAM_CHAT_ID,
       "text": message_text,
-      # parse_mode entfernt, um Markdown-Fehler zu vermeiden
   }
   try:
     response = requests.post(url, json=payload)
-    # Wichtig: Löst bei HTTP-Fehlern (z.B. 400 Bad Request) einen Fehler aus
     response.raise_for_status()
     print("✅ Signal erfolgreich an Telegram gesendet.")
   except requests.exceptions.HTTPError as err:
@@ -39,15 +37,16 @@ def calculate_atr(df, period=14):
 
 def check_gold_setup():
   """Analysiert Gold auf dem M15-Timeframe mit EMA & ATR."""
-  ticker_symbol = "XAUUSD=X"
+  ticker_symbol = "GC=F"  # Stabiler Ticker für Gold Futures auf Yahoo Finance
   interval = "15m"
-  period = "60d"
+  period = "30d"  # Ausreichend Daten für den EMA 200
 
   try:
     ticker = yf.Ticker(ticker_symbol)
     df = ticker.history(period=period, interval=interval)
 
     if df.empty or len(df) < 200:
+      print(f"⚠️ Zu wenig oder keine Daten geladen (Zeilen: {len(df)})")
       return None
 
     # Indikatoren berechnen
@@ -81,7 +80,7 @@ def check_gold_setup():
       take_profit = 0
 
     return {
-        "symbol": "Gold (XAU/USD)",
+        "symbol": "Gold (GC=F)",
         "timeframe": "M15",
         "trend": trend,
         "signal": signal,
