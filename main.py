@@ -1,9 +1,8 @@
-import time
 import pandas as pd
 import requests
 import yfinance as yf
 
-# --- DEINE ZUGANGSDATEN (aus deinem alten Code übernommen) ---
+# --- DEINE ZUGANGSDATEN ---
 TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
 TELEGRAM_CHAT_ID = "6551623158"
 
@@ -94,61 +93,34 @@ def check_gold_setup():
 
 
 def main():
-  print(
-      "🤖 main.py gestartet: Gold M15 Trading Bot läuft im 15-Minuten-Takt..."
-  )
-  print("📡 Es werden ab sofort NUR noch echte Trade-Signale an Telegram"
-        " gesendet.")
+  print("🤖 Starte einmalige Gold M15 Prüfung...")
 
-  last_signal = None  # Merkt sich das letzte Signal gegen Spam
+  data = check_gold_setup()
 
-  while True:
-    data = check_gold_setup()
+  if data:
+    current_signal = data["signal"]
 
-    if data:
-      current_signal = data["signal"]
-
-      # Nur senden, wenn es ein echtes Signal ist UND sich zum vorherigen unterscheidet
-      if current_signal != "KEIN TRADE" and current_signal != last_signal:
-        report = (
-            f"🚨 *NEUES M15 TRADING SIGNAL* 🚨\n"
-            f"-----------------------------------\n"
-            f"📊 *Asset:* {data['symbol']} ({data['timeframe']})\n"
-            f"• *Trend:* {data['trend']}\n"
-            f"• *Signal:* *{data['signal']}*\n"
-            f"• *Empfehlung:* ➔ *{data['trade_advice']}*\n\n"
-            f"• *Aktueller Preis (Einstieg):* ${data['price']}\n"
-            f"• *Stop-Loss (SL):* 🛑 ${data['sl']}\n"
-            f"• *Take-Profit (TP):* 🎯 ${data['tp']}\n\n"
-            f"• *EMA 50:* ${data['ema_50']} | *EMA 200:* ${data['ema_200']}\n"
-        )
-        send_telegram_message(report)
-        last_signal = current_signal
-        print(f"[{time.strftime('%H:%M:%S']}] Signal gesendet: {current_signal}")
-
-      elif current_signal == "KEIN TRADE":
-        last_signal = (
-            "KEIN TRADE"  # Zurücksetzen, damit das nächste Signal direkt greift
-        )
-        print(
-            f"[{time.strftime('%H:%M:%S']}] Kein Trade-Signal (Preis:"
-            f" ${data['price']})"
-        )
-      else:
-        print(
-            f"[{time.strftime('%H:%M:%S']}] Signal unverändert"
-            f" ({current_signal}), keine Nachricht gesendet."
-        )
-
-    else:
-      # Fehler werden jetzt sauber in der Konsole geloggt, ohne Telegram zu belasten
-      print(
-          f"[{time.strftime('%H:%M:%S']}] ⚠️ Warnung: Konnte keine aktuellen"
-          " Daten abrufen."
+    # Wenn ein echter Trade vorliegt, an Telegram senden
+    if current_signal != "KEIN TRADE":
+      report = (
+          f"🚨 *NEUES M15 TRADING SIGNAL* 🚨\n"
+          f"-----------------------------------\n"
+          f"📊 *Asset:* {data['symbol']} ({data['timeframe']})\n"
+          f"• *Trend:* {data['trend']}\n"
+          f"• *Signal:* *{data['signal']}*\n"
+          f"• *Empfehlung:* ➔ *{data['trade_advice']}*\n\n"
+          f"• *Aktueller Preis (Einstieg):* ${data['price']}\n"
+          f"• *Stop-Loss (SL):* 🛑 ${data['sl']}\n"
+          f"• *Take-Profit (TP):* 🎯 ${data['tp']}\n\n"
+          f"• *EMA 50:* ${data['ema_50']} | *EMA 200:* ${data['ema_200']}\n"
       )
-
-    # 15 Minuten warten (900 Sekunden)
-    time.sleep(900)
+      send_telegram_message(report)
+      print("✅ Signal erfolgreich an Telegram gesendet.")
+    else:
+      print("ℹ️ Kein klares Trade-Signal (Seitwärtsphase). Keine Nachricht gesendet.")
+  else:
+    # Fehler werden nur in den GitHub-Logs ausgegeben, kein Telegram-Spam
+    print("⚠️ Warnung: Konnte keine aktuellen Daten abrufen.")
 
 
 if __name__ == "__main__":
