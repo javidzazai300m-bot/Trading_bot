@@ -1,3 +1,4 @@
+import time
 import pandas as pd
 import requests
 import yfinance as yf
@@ -31,8 +32,12 @@ def calculate_atr(df, period=14):
   return true_range.rolling(period).mean()
 
 
-def check_market_setup(ticker_symbol, interval="1h", period="60d"):
-  """Berechnet Trend, Einstieg, SL und TP basierend auf EMA & ATR."""
+def check_gold_setup():
+  """Analysiert Gold auf dem M15-Timeframe mit EMA & ATR."""
+  ticker_symbol = "XAUUSD=X"
+  interval = "15m"
+  period = "60d"
+
   try:
     ticker = yf.Ticker(ticker_symbol)
     df = ticker.history(period=period, interval=interval)
@@ -50,29 +55,32 @@ def check_market_setup(ticker_symbol, interval="1h", period="60d"):
     ema_200 = df["EMA_200"].iloc[-1]
     atr = df["ATR"].iloc[-1]
 
-    # Trend- und Signal-Logik
+    # Trend- und Signal-Logik (M15)
     if ema_50 > ema_200 and current_price > ema_50:
       trend = "BULLISH 🟢"
       signal = "BUY (LONG)"
-      # SL unter dem aktuellen Kurs basierend auf ATR, TP mit CRV 2:1
+      trade_advice = "JA ✅ (Trend ist Bullish - Jetzt Long traden)"
       stop_loss = current_price - (1.5 * atr)
       take_profit = current_price + (3.0 * atr)
     elif ema_50 < ema_200 and current_price < ema_50:
       trend = "BEARISH 🔴"
       signal = "SELL (SHORT)"
-      # SL über dem aktuellen Kurs, TP nach unten
+      trade_advice = "JA ✅ (Trend ist Bearish - Jetzt Short traden)"
       stop_loss = current_price + (1.5 * atr)
       take_profit = current_price - (3.0 * atr)
     else:
-      trend = "NEUTRAL / KORREKTUR 🟡"
-      signal = "KEIN TRADE (Seitwärtsmarkt)"
+      trend = "NEUTRAL / SEITWÄRTS 🟡"
+      signal = "KEIN TRADE"
+      trade_advice = "NEIN ❌ (Warten auf klaren Trend / Seitwärtsphase)"
       stop_loss = 0
       take_profit = 0
 
     return {
-        "symbol": ticker_symbol,
+        "symbol": "Gold (XAU/USD)",
+        "timeframe": "M15",
         "trend": trend,
         "signal": signal,
+        "trade_advice": trade_advice,
         "price": round(current_price, 2),
         "sl": round(stop_loss, 2),
         "tp": round(take_profit, 2),
@@ -81,40 +89,51 @@ def check_market_setup(ticker_symbol, interval="1h", period="60d"):
     }
 
   except Exception as e:
-    print(f"Fehler bei {ticker_symbol}: {e}")
+    print(f"Fehler bei der Gold-Analyse: {e}")
     return None
 
 
 def main():
-  # HIER GEÄNDERT: GC=F (Futures) ersetzt durch XAUUSD=X (Spot-Preis)
-  symbols = {
-      "Gold (XAU/USD)": "XAUUSD=X",
-      "Bitcoin": "BTC-USD",
-      "Ethereum": "ETH-USD",
-  }
+  print(
+      "🤖 main.py gestartet: Gold M15 Trading Bot läuft im 15-Minuten-Takt..."
+  )
 
-  report = "🤖 *Zabaritradingbot Signal-Analyse*\n"
-  report += "-----------------------------------\n\n"
+  send_telegram_message(
+      "🚀 *main.py gestartet!*\nIch überwache den Goldpreis auf dem M15-Chart"
+      " ab sofort alle 15 Minuten."
+  )
 
-  for name, sym in symbols.items():
-    data = check_market_setup(sym, interval="1h", period="60d")
+  while True:
+    data = check_gold_setup()
     if data:
-      report += (
-          f"📊 *{name}* (`{sym}`)\n"
+      report = (
+          f"🔔 *Gold M15 Markt-Update*\n"
+          f"-----------------------------------\n"
+          f"📊 *Asset:* {data['symbol']} ({data['timeframe']})\n"
           f"• *Trend:* {data['trend']}\n"
           f"• *Signal:* *{data['signal']}*\n"
-          f"• *Einstieg (Kurs):* ${data['price']}\n"
+          f"• *Traden?* ➔ *{data['trade_advice']}*\n\n"
+          f"• *Aktueller Preis (Einstieg):* ${data['price']}\n"
       )
-      if data["signal"] != "KEIN TRADE (Seitwärtsmarkt)":
+
+      if data["signal"] != "KEIN TRADE":
         report += (
             f"• *Stop-Loss (SL):* 🛑 ${data['sl']}\n"
             f"• *Take-Profit (TP):* 🎯 ${data['tp']}\n"
         )
+
       report += (
-          f"• *EMA 50:* ${data['ema_50']} | *EMA 200:* ${data['ema_200']}\n\n"
+          f"\n• *EMA 50:* ${data['ema_50']} | *EMA 200:* ${data['ema_200']}\n"
       )
 
-  send_telegram_message(report)
+      send_telegram_message(report)
+    else:
+      send_telegram_message(
+          "⚠️ *Gold M15 Warnung:* Konnte keine aktuellen Daten abrufen."
+      )
+
+    # 15 Minuten warten
+    time.sleep(900)
 
 
 if __name__ == "__main__":
