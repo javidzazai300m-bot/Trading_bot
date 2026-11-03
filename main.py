@@ -25,7 +25,7 @@ def send_telegram_message(message_text):
     print(f"❌ Netzwerk- oder unerwarteter Fehler: {e}")
 
 
-def calculate_atr(df, period=14):
+def calculate_atr(df, period=12):
   """Berechnet die Average True Range (ATR) für die Volatilität."""
   high_low = df["High"] - df["Low"]
   high_close = (df["High"] - df["Close"].shift()).abs()
