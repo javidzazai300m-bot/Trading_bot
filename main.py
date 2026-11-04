@@ -1,4 +1,3 @@
-import time
 import pandas as pd
 import requests
 import yfinance as yf
@@ -60,7 +59,6 @@ def check_gold_setup():
     ema_200 = df["EMA_200"].iloc[-1]
     atr = df["ATR"].iloc[-1]
 
-    # Konsolen-Debug, damit du siehst, wie die Werte stehen
     print(
         f"🔍 Debug: Preis={current_price:.2f} | EMA50={ema_50:.2f} |"
         f" EMA200={ema_200:.2f}"
@@ -105,35 +103,29 @@ def check_gold_setup():
 
 
 def main():
-  print("🤖 Starte Gold M15 Bot (Dauerschleife aktiv)...")
+  print("🤖 Starte einmalige Gold M15 Prüfung...")
 
-  while True:
-    print("\n--- Prüfe Markt-Update ---")
-    data = check_gold_setup()
+  data = check_gold_setup()
 
-    if data:
-      report = (
-          f"🤖 M15 BOT STATUS-UPDATE 🤖\n"
-          f"-----------------------------------\n"
-          f"📊 Asset: {data['symbol']} ({data['timeframe']})\n"
-          f"• Trend: {data['trend']}\n"
-          f"• Signal: {data['signal']}\n"
-          f"• Empfehlung: {data['trade_advice']}\n\n"
-          f"• Aktueller Preis: ${data['price']}\n"
-          f"• Stop-Loss (SL): ${data['sl']}\n"
-          f"• Take-Profit (TP): ${data['tp']}\n\n"
-          f"• EMA 50: ${data['ema_50']} | EMA 200: ${data['ema_200']}\n"
-      )
-      send_telegram_message(report)
-    else:
-      print("⚠️ Warnung: Konnte keine aktuellen Daten abrufen.")
-      send_telegram_message(
-          "⚠️ Gold M15 Bot: Warnung - Konnte keine Marktdaten abrufen."
-      )
-
-    # 15 Minuten (900 Sekunden) warten bis zur nächsten Kerze
-    print("⏳ Warte 15 Minuten bis zur nächsten Prüfung...")
-    time.sleep(900)
+  if data:
+    report = (
+        f"🤖 M15 BOT STATUS-UPDATE 🤖\n"
+        f"-----------------------------------\n"
+        f"📊 Asset: {data['symbol']} ({data['timeframe']})\n"
+        f"• Trend: {data['trend']}\n"
+        f"• Signal: {data['signal']}\n"
+        f"• Empfehlung: {data['trade_advice']}\n\n"
+        f"• Aktueller Preis: ${data['price']}\n"
+        f"• Stop-Loss (SL): ${data['sl']}\n"
+        f"• Take-Profit (TP): ${data['tp']}\n\n"
+        f"• EMA 50: ${data['ema_50']} | EMA 200: ${data['ema_200']}\n"
+    )
+    send_telegram_message(report)
+  else:
+    print("⚠️ Warnung: Konnte keine aktuellen Daten abrufen.")
+    send_telegram_message(
+        "⚠️ Gold M15 Bot: Warnung - Konnte keine Marktdaten abrufen."
+    )
 
 
 if __name__ == "__main__":
