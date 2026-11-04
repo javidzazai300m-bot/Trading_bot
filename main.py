@@ -1,7 +1,5 @@
-import time
 import pandas as pd
 import requests
-import schedule
 import yfinance as yf
 
 # --- DEINE ZUGANGSDATEN ---
@@ -40,8 +38,8 @@ def calculate_atr(df, period=12):
 def check_gold_setup():
   """Analysiert Gold auf dem M30-Timeframe für 30-Minuten-Trades."""
   ticker_symbol = "GC=F"  # Gold-Futures
-  interval = "30m"  # Auf M30 geändert für den 30-Minuten-Trade-Fokus
-  period = "60d"  # Etwas mehr Historie für M30
+  interval = "30m"
+  period = "60d"
 
   try:
     ticker = yf.Ticker(ticker_symbol)
@@ -60,11 +58,6 @@ def check_gold_setup():
     ema_50 = df["EMA_50"].iloc[-1]
     ema_200 = df["EMA_200"].iloc[-1]
     atr = df["ATR"].iloc[-1]
-
-    print(
-        f"🔍 Debug: Preis={current_price:.2f} | EMA50={ema_50:.2f} |"
-        f" EMA200={ema_200:.2f}"
-    )
 
     # Trend- und Signal-Logik (M30)
     if ema_50 > ema_200 and current_price > ema_50:
@@ -104,9 +97,8 @@ def check_gold_setup():
     return None
 
 
-def run_bot_job():
-  print("🤖 Führe planmäßige Gold M30 Prüfung aus...")
-
+def main():
+  print("🤖 Führe Gold M30 Prüfung aus...")
   data = check_gold_setup()
 
   if data:
@@ -128,24 +120,6 @@ def run_bot_job():
     send_telegram_message(
         "⚠️ Gold Bot: Warnung - Konnte keine Marktdaten abrufen."
     )
-
-
-def main():
-  print(
-      "🚀 Bot gestartet! Er läuft jetzt im Hintergrund und sendet alle 15"
-      " Minuten ein Update."
-  )
-
-  # Sofort beim Start einmal ausführen (optional, damit du nicht warten musst)
-  run_bot_job()
-
-  # Den Job alle 15 Minuten einplanen
-  schedule.every(15).minutes.do(run_bot_job)
-
-  # Endlosschleife, die den Bot am Laufen hält
-  while True:
-    schedule.run_pending()
-    time.sleep(1)
 
 
 if __name__ == "__main__":
