@@ -1,3 +1,4 @@
+import time
 import pandas as pd
 import requests
 import yfinance as yf
@@ -15,7 +16,7 @@ def send_telegram_message(message_text):
       "text": message_text,
   }
   try:
-    response = requests.post(url, json=payload)
+    response = requests.post(url, json=payload, timeout=10)
     response.raise_for_status()
     print("✅ Signal erfolgreich an Telegram gesendet.")
   except requests.exceptions.HTTPError as err:
@@ -37,11 +38,9 @@ def calculate_atr(df, period=12):
 
 def check_gold_setup():
   """Analysiert Gold auf dem M15-Timeframe mit EMA & ATR."""
-  ticker_symbol = (
-      "GC=F"  # Wieder zurück zum stabilen Gold-Futures-Ticker von Yahoo Finance
-  )
+  ticker_symbol = "GC=F"  # Gold-Futures
   interval = "15m"
-  period = "30d"  # Ausreichend Daten für den EMA 200
+  period = "30d"
 
   try:
     ticker = yf.Ticker(ticker_symbol)
@@ -60,6 +59,12 @@ def check_gold_setup():
     ema_50 = df["EMA_50"].iloc[-1]
     ema_200 = df["EMA_200"].iloc[-1]
     atr = df["ATR"].iloc[-1]
+
+    # Konsolen-Debug, damit du siehst, wie die Werte stehen
+    print(
+        f"🔍 Debug: Preis={current_price:.2f} | EMA50={ema_50:.2f} |"
+        f" EMA200={ema_200:.2f}"
+    )
 
     # Trend- und Signal-Logik (M15)
     if ema_50 > ema_200 and current_price > ema_50:
@@ -95,35 +100,40 @@ def check_gold_setup():
     }
 
   except Exception as e:
-    print(f"Fehler bei der Gold-Analyse: {e}")
+    print(f"❌ Fehler bei der Gold-Analyse: {e}")
     return None
 
 
 def main():
-  print("🤖 Starte einmalige Gold M15 Prüfung...")
+  print("🤖 Starte Gold M15 Bot (Dauerschleife aktiv)...")
 
-  data = check_gold_setup()
+  while True:
+    print("\n--- Prüfe Markt-Update ---")
+    data = check_gold_setup()
 
-  if data:
-    # Nachricht wird alle 15 Minuten gesendet
-    report = (
-        f"🤖 M15 BOT STATUS-UPDATE 🤖\n"
-        f"-----------------------------------\n"
-        f"📊 Asset: {data['symbol']} ({data['timeframe']})\n"
-        f"• Trend: {data['trend']}\n"
-        f"• Signal: {data['signal']}\n"
-        f"• Empfehlung: {data['trade_advice']}\n\n"
-        f"• Aktueller Preis: ${data['price']}\n"
-        f"• Stop-Loss (SL): ${data['sl']}\n"
-        f"• Take-Profit (TP): ${data['tp']}\n\n"
-        f"• EMA 50: ${data['ema_50']} | EMA 200: ${data['ema_200']}\n"
-    )
-    send_telegram_message(report)
-  else:
-    print("⚠️ Warnung: Konnte keine aktuellen Daten abrufen.")
-    send_telegram_message(
-        "⚠️ Gold M15 Bot: Warnung - Konnte keine Marktdaten abrufen."
-    )
+    if data:
+      report = (
+          f"🤖 M15 BOT STATUS-UPDATE 🤖\n"
+          f"-----------------------------------\n"
+          f"📊 Asset: {data['symbol']} ({data['timeframe']})\n"
+          f"• Trend: {data['trend']}\n"
+          f"• Signal: {data['signal']}\n"
+          f"• Empfehlung: {data['trade_advice']}\n\n"
+          f"• Aktueller Preis: ${data['price']}\n"
+          f"• Stop-Loss (SL): ${data['sl']}\n"
+          f"• Take-Profit (TP): ${data['tp']}\n\n"
+          f"• EMA 50: ${data['ema_50']} | EMA 200: ${data['ema_200']}\n"
+      )
+      send_telegram_message(report)
+    else:
+      print("⚠️ Warnung: Konnte keine aktuellen Daten abrufen.")
+      send_telegram_message(
+          "⚠️ Gold M15 Bot: Warnung - Konnte keine Marktdaten abrufen."
+      )
+
+    # 15 Minuten (900 Sekunden) warten bis zur nächsten Kerze
+    print("⏳ Warte 15 Minuten bis zur nächsten Prüfung...")
+    time.sleep(900)
 
 
 if __name__ == "__main__":
