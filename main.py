@@ -1,5 +1,7 @@
+import time
 import pandas as pd
 import requests
+import schedule
 import yfinance as yf
 
 # --- DEINE ZUGANGSDATEN ---
@@ -36,10 +38,10 @@ def calculate_atr(df, period=12):
 
 
 def check_gold_setup():
-  """Analysiert Gold auf dem M15-Timeframe mit EMA & ATR."""
+  """Analysiert Gold auf dem M30-Timeframe für 30-Minuten-Trades."""
   ticker_symbol = "GC=F"  # Gold-Futures
-  interval = "15m"
-  period = "30d"
+  interval = "30m"  # Auf M30 geändert für den 30-Minuten-Trade-Fokus
+  period = "60d"  # Etwas mehr Historie für M30
 
   try:
     ticker = yf.Ticker(ticker_symbol)
@@ -64,19 +66,19 @@ def check_gold_setup():
         f" EMA200={ema_200:.2f}"
     )
 
-    # Trend- und Signal-Logik (M15)
+    # Trend- und Signal-Logik (M30)
     if ema_50 > ema_200 and current_price > ema_50:
       trend = "BULLISH 🟢"
       signal = "BUY (LONG)"
-      trade_advice = "JA (Trend ist Bullish - Jetzt Long traden)"
+      trade_advice = "JA (Trend auf M30 ist Bullish - Für 30 Min Long)"
       stop_loss = current_price - (1.5 * atr)
-      take_profit = current_price + (3.0 * atr)
+      take_profit = current_price + (2.0 * atr)
     elif ema_50 < ema_200 and current_price < ema_50:
       trend = "BEARISH 🔴"
       signal = "SELL (SHORT)"
-      trade_advice = "JA (Trend ist Bearish - Jetzt Short traden)"
+      trade_advice = "JA (Trend auf M30 ist Bearish - Für 30 Min Short)"
       stop_loss = current_price + (1.5 * atr)
-      take_profit = current_price - (3.0 * atr)
+      take_profit = current_price - (2.0 * atr)
     else:
       trend = "NEUTRAL / SEITWÄRTS 🟡"
       signal = "KEIN TRADE"
@@ -86,7 +88,7 @@ def check_gold_setup():
 
     return {
         "symbol": "Gold Futures (GC=F)",
-        "timeframe": "M15",
+        "timeframe": "M30 (30-Min-Trade)",
         "trend": trend,
         "signal": signal,
         "trade_advice": trade_advice,
@@ -102,14 +104,14 @@ def check_gold_setup():
     return None
 
 
-def main():
-  print("🤖 Starte einmalige Gold M15 Prüfung...")
+def run_bot_job():
+  print("🤖 Führe planmäßige Gold M30 Prüfung aus...")
 
   data = check_gold_setup()
 
   if data:
     report = (
-        f"🤖 M15 BOT STATUS-UPDATE 🤖\n"
+        f"🤖 30-MINUTEN TRADE BOT UPDATE 🤖\n"
         f"-----------------------------------\n"
         f"📊 Asset: {data['symbol']} ({data['timeframe']})\n"
         f"• Trend: {data['trend']}\n"
@@ -124,8 +126,26 @@ def main():
   else:
     print("⚠️ Warnung: Konnte keine aktuellen Daten abrufen.")
     send_telegram_message(
-        "⚠️ Gold M15 Bot: Warnung - Konnte keine Marktdaten abrufen."
+        "⚠️ Gold Bot: Warnung - Konnte keine Marktdaten abrufen."
     )
+
+
+def main():
+  print(
+      "🚀 Bot gestartet! Er läuft jetzt im Hintergrund und sendet alle 15"
+      " Minuten ein Update."
+  )
+
+  # Sofort beim Start einmal ausführen (optional, damit du nicht warten musst)
+  run_bot_job()
+
+  # Den Job alle 15 Minuten einplanen
+  schedule.every(15).minutes.do(run_bot_job)
+
+  # Endlosschleife, die den Bot am Laufen hält
+  while True:
+    schedule.run_pending()
+    time.sleep(1)
 
 
 if __name__ == "__main__":
