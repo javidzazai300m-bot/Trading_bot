@@ -36,8 +36,8 @@ def calculate_atr(df, period=12):
 
 
 def check_gold_setup():
-  """Analysiert Gold auf dem M30-Timeframe für 30-Minuten-Trades."""
-  ticker_symbol = "GC=F"  # Gold-Futures
+  """Analysiert XAUUSD auf dem M30-Timeframe für 30-Minuten-Trades."""
+  ticker_symbol = "XAUUSD=X"  # Spot Gold (XAU/USD) passend zu deiner App
   interval = "30m"
   period = "60d"
 
@@ -80,7 +80,7 @@ def check_gold_setup():
       take_profit = 0
 
     return {
-        "symbol": "Gold Futures (GC=F)",
+        "symbol": "XAUUSD (Spot)",
         "timeframe": "M30 (30-Min-Trade)",
         "trend": trend,
         "signal": signal,
@@ -93,17 +93,17 @@ def check_gold_setup():
     }
 
   except Exception as e:
-    print(f"❌ Fehler bei der Gold-Analyse: {e}")
+    print(f"❌ Fehler bei der XAUUSD-Analyse: {e}")
     return None
 
 
 def main():
-  print("🤖 Führe Gold M30 Prüfung aus...")
+  print("🤖 Führe XAUUSD M30 Prüfung aus...")
   data = check_gold_setup()
 
   if data:
     report = (
-        f"🤖 30-MINUTEN TRADE BOT UPDATE 🤖\n"
+        f"🤖 XAUUSD 30-MINUTEN TRADE BOT 🤖\n"
         f"-----------------------------------\n"
         f"📊 Asset: {data['symbol']} ({data['timeframe']})\n"
         f"• Trend: {data['trend']}\n"
@@ -118,7 +118,7 @@ def main():
   else:
     print("⚠️ Warnung: Konnte keine aktuellen Daten abrufen.")
     send_telegram_message(
-        "⚠️ Gold Bot: Warnung - Konnte keine Marktdaten abrufen."
+        "⚠️ XAUUSD Bot: Warnung - Konnte keine Marktdaten abrufen."
     )
 
 
