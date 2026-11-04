@@ -36,8 +36,8 @@ def calculate_atr(df, period=12):
 
 
 def check_gold_setup():
-  """Analysiert XAUUSD auf dem M30-Timeframe für 30-Minuten-Trades."""
-  ticker_symbol = "XAUUSD=X"  # Spot Gold (XAU/USD) passend zu deiner App
+  """Analysiert Gold auf dem M30-Timeframe für 30-Minuten-Trades."""
+  ticker_symbol = "GC=F"  # Nutzt stabile Future-Daten als Quelle
   interval = "30m"
   period = "60d"
 
@@ -45,7 +45,7 @@ def check_gold_setup():
     ticker = yf.Ticker(ticker_symbol)
     df = ticker.history(period=period, interval=interval)
 
-    if df.empty or len(df) < 200:
+    if df.empty or len(df) < 50:
       print(f"⚠️ Zu wenig oder keine Daten geladen (Zeilen: {len(df)})")
       return None
 
@@ -80,7 +80,7 @@ def check_gold_setup():
       take_profit = 0
 
     return {
-        "symbol": "XAUUSD (Spot)",
+        "symbol": "XAUUSD (Spot / Gold)",
         "timeframe": "M30 (30-Min-Trade)",
         "trend": trend,
         "signal": signal,
