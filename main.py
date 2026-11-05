@@ -8,11 +8,12 @@ TELEGRAM_CHAT_ID = "6551623158"
 
 
 def send_telegram_message(message_text):
-  """Sendet die Nachricht an deinen Telegram-Chat."""
+  """Sendet die Nachricht als HTML formatiert an deinen Telegram-Chat."""
   url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
   payload = {
       "chat_id": TELEGRAM_CHAT_ID,
       "text": message_text,
+      "parse_mode": "HTML",  # Aktiviert HTML für saubere Fettung ohne Sternchen-Fehler
   }
   try:
     response = requests.post(url, json=payload, timeout=10)
@@ -56,7 +57,7 @@ def check_gold_setup():
     prev_close = df["Close"].iloc[-2]
     atr = df["ATR"].iloc[-1]
 
-    # Klare Preis-Action Logik (Vergleich letzte Kerze zur vorherigen)
+    # Klare Preis-Action Logik
     if current_price > prev_close:
       signal = "BUY (LONG SCALP)"
       trade_advice = "JA (Momentum Aufwärts - Long)"
@@ -75,6 +76,7 @@ def check_gold_setup():
         "timeframe": "M15 (15-Min Scalping)",
         "signal": signal,
         "trade_advice": trade_advice,
+        "price": round(current_price, 2),
         "entry": round(entry_price, 2),
         "sl": round(stop_loss, 2),
         "tp": round(take_profit, 2),
@@ -91,14 +93,15 @@ def main():
 
   if data:
     report = (
-        f"⚡ XAUUSD 15-MINUTEN SCALPING SIGNAL ⚡\n"
+        f"⚡ <b>XAUUSD 15-MINUTEN SCALPING SIGNAL</b> ⚡\n"
         f"-----------------------------------\n"
         f"📊 Asset: {data['symbol']} ({data['timeframe']})\n"
         f"• Signal: {data['signal']}\n"
         f"• Empfehlung: {data['trade_advice']}\n\n"
-        f"• **Einstiegspreis:** ${data['entry']}\n"
-        f"• **Stop-Loss (SL):** ${data['sl']}\n"
-        f"• **Take-Profit (TP):** ${data['tp']}\n"
+        f"• <b>Aktueller Preis:</b> ${data['price']}\n"
+        f"• <b>Einstiegspreis:</b> ${data['entry']}\n"
+        f"• <b>Stop-Loss (SL):</b> ${data['sl']}\n"
+        f"• <b>Take-Profit (TP):</b> ${data['tp']}\n"
     )
     send_telegram_message(report)
   else:
