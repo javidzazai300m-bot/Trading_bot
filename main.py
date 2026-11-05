@@ -36,10 +36,10 @@ def calculate_atr(df, period=12):
 
 
 def check_gold_setup():
-  """Analysiert Gold auf dem M30-Timeframe für 30-Minuten-Trades."""
+  """Analysiert Gold auf dem M15-Timeframe für 15-Minuten-Scalping."""
   ticker_symbol = "GC=F"  # Nutzt stabile Future-Daten als Quelle
-  interval = "30m"
-  period = "60d"
+  interval = "15m"
+  period = "60d"  # 60 Tage Historie reicht völlig für M15 aus
 
   try:
     ticker = yf.Ticker(ticker_symbol)
@@ -49,7 +49,7 @@ def check_gold_setup():
       print(f"⚠️ Zu wenig oder keine Daten geladen (Zeilen: {len(df)})")
       return None
 
-    # Indikatoren berechnen
+    # Indikatoren berechnen (für schnelleres Scalping können EMA 20/50 oder EMA 50/200 genutzt werden)
     df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
     df["EMA_200"] = df["Close"].ewm(span=200, adjust=False).mean()
     df["ATR"] = calculate_atr(df)
@@ -59,29 +59,29 @@ def check_gold_setup():
     ema_200 = df["EMA_200"].iloc[-1]
     atr = df["ATR"].iloc[-1]
 
-    # Trend- und Signal-Logik (M30)
+    # Trend- und Signal-Logik (M15 Scalping)
     if ema_50 > ema_200 and current_price > ema_50:
       trend = "BULLISH 🟢"
-      signal = "BUY (LONG)"
-      trade_advice = "JA (Trend auf M30 ist Bullish - Für 30 Min Long)"
-      stop_loss = current_price - (1.5 * atr)
-      take_profit = current_price + (2.0 * atr)
+      signal = "BUY (LONG SCALP)"
+      trade_advice = "JA (M15 Trend Bullish - Scalp Long)"
+      stop_loss = current_price - (1.2 * atr)  # Etwas strafferer SL für Scalping
+      take_profit = current_price + (1.8 * atr)
     elif ema_50 < ema_200 and current_price < ema_50:
       trend = "BEARISH 🔴"
-      signal = "SELL (SHORT)"
-      trade_advice = "JA (Trend auf M30 ist Bearish - Für 30 Min Short)"
-      stop_loss = current_price + (1.5 * atr)
-      take_profit = current_price - (2.0 * atr)
+      signal = "SELL (SHORT SCALP)"
+      trade_advice = "JA (M15 Trend Bearish - Scalp Short)"
+      stop_loss = current_price + (1.2 * atr)
+      take_profit = current_price - (1.8 * atr)
     else:
       trend = "NEUTRAL / SEITWÄRTS 🟡"
       signal = "KEIN TRADE"
-      trade_advice = "NEIN (Warten auf klaren Trend / Seitwärtsphase)"
+      trade_advice = "NEIN (Kein klarer M15 Trend - Warten)"
       stop_loss = 0
       take_profit = 0
 
     return {
         "symbol": "XAUUSD (Spot / Gold)",
-        "timeframe": "M30 (30-Min-Trade)",
+        "timeframe": "M15 (15-Min Scalping)",
         "trend": trend,
         "signal": signal,
         "trade_advice": trade_advice,
@@ -98,12 +98,12 @@ def check_gold_setup():
 
 
 def main():
-  print("🤖 Führe XAUUSD M30 Prüfung aus...")
+  print("🤖 Führe XAUUSD M15 Scalping Prüfung aus...")
   data = check_gold_setup()
 
   if data:
     report = (
-        f"🤖 XAUUSD 30-MINUTEN TRADE BOT 🤖\n"
+        f"⚡ XAUUSD 15-MINUTEN SCALPING BOT ⚡\n"
         f"-----------------------------------\n"
         f"📊 Asset: {data['symbol']} ({data['timeframe']})\n"
         f"• Trend: {data['trend']}\n"
@@ -118,7 +118,7 @@ def main():
   else:
     print("⚠️ Warnung: Konnte keine aktuellen Daten abrufen.")
     send_telegram_message(
-        "⚠️ XAUUSD Bot: Warnung - Konnte keine Marktdaten abrufen."
+        "⚠️ XAUUSD Scalp Bot: Warnung - Konnte keine Marktdaten abrufen."
     )
 
 
