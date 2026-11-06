@@ -2,7 +2,7 @@ name: Gold M15 Signal Bot
 
 on:
   schedule:
-  - cron: '*/15 * * * *'
+    - cron: '*/30 * * * *'  # Läuft jetzt alle 30 Minuten
   workflow_dispatch:
 
 jobs:
