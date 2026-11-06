@@ -1,115 +1,94 @@
-import pandas as pd
+import time
 import requests
+import pandas as pd
 import yfinance as yf
 
-# --- DEINE ZUGANGSDATEN ---
+# --- DEINE DATEN ---
+SYMBOL = "GC=F"          # Gold Futures (XAUUSD-Äquivalent)
 TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
 TELEGRAM_CHAT_ID = "6551623158"
 
-
-def send_telegram_message(message_text):
-  """Sendet die Nachricht als HTML formatiert an deinen Telegram-Chat."""
-  url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-  payload = {
-      "chat_id": TELEGRAM_CHAT_ID,
-      "text": message_text,
-      "parse_mode": "HTML",  # Aktiviert HTML für saubere Fettung ohne Sternchen-Fehler
-  }
-  try:
-    response = requests.post(url, json=payload, timeout=10)
-    response.raise_for_status()
-    print("✅ Signal erfolgreich an Telegram gesendet.")
-  except requests.exceptions.HTTPError as err:
-    print(f"❌ Telegram HTTP-Fehler: {err}")
-    print(f"Antwort von Telegram: {response.text}")
-  except Exception as e:
-    print(f"❌ Netzwerk- oder unerwarteter Fehler: {e}")
-
-
-def calculate_atr(df, period=12):
-  """Berechnet die Average True Range (ATR) für die Volatilität."""
-  high_low = df["High"] - df["Low"]
-  high_close = (df["High"] - df["Close"].shift()).abs()
-  low_close = (df["Low"] - df["Close"].shift()).abs()
-  ranges = pd.concat([high_low, high_close, low_close], axis=1)
-  true_range = ranges.max(axis=1)
-  return true_range.rolling(period).mean()
-
-
-def check_gold_setup():
-  """Analysiert Gold auf dem M15-Timeframe für klare Preis-Signale."""
-  ticker_symbol = "GC=F"
-  interval = "15m"
-  period = "60d"
-
-  try:
-    ticker = yf.Ticker(ticker_symbol)
-    df = ticker.history(period=period, interval=interval)
-
-    if df.empty or len(df) < 50:
-      print(f"⚠️ Zu wenig oder keine Daten geladen (Zeilen: {len(df)})")
-      return None
-
-    # ATR zur dynamischen Bestimmung von SL und TP
-    df["ATR"] = calculate_atr(df)
-
-    current_price = df["Close"].iloc[-1]
-    prev_close = df["Close"].iloc[-2]
-    atr = df["ATR"].iloc[-1]
-
-    # Klare Preis-Action Logik
-    if current_price > prev_close:
-      signal = "BUY (LONG SCALP)"
-      trade_advice = "JA (Momentum Aufwärts - Long)"
-      entry_price = current_price
-      stop_loss = entry_price - (1.2 * atr)
-      take_profit = entry_price + (1.8 * atr)
-    else:
-      signal = "SELL (SHORT SCALP)"
-      trade_advice = "JA (Momentum Abwärts - Short)"
-      entry_price = current_price
-      stop_loss = entry_price + (1.2 * atr)
-      take_profit = entry_price - (1.8 * atr)
-
-    return {
-        "symbol": "XAUUSD (Spot / Gold)",
-        "timeframe": "M15 (15-Min Scalping)",
-        "signal": signal,
-        "trade_advice": trade_advice,
-        "price": round(current_price, 2),
-        "entry": round(entry_price, 2),
-        "sl": round(stop_loss, 2),
-        "tp": round(take_profit, 2),
+def send_telegram_message(message):
+    """Sendet die Signal-Nachricht direkt an deinen Telegram-Chat"""
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID, 
+        "text": message, 
+        "parse_mode": "Markdown"
     }
+    try:
+        response = requests.post(url, json=payload)
+        if response.status_code == 200:
+            print("Telegram-Nachricht erfolgreich gesendet!")
+        else:
+            print(f"Fehler beim Senden: {response.text}")
+    except Exception as e:
+        print(f"Verbindungsfehler: {e}")
 
-  except Exception as e:
-    print(f"❌ Fehler bei der XAUUSD-Analyse: {e}")
-    return None
+def check_trading_signals():
+    """Analysiert den Markt nach Bull- und Bear-Flags inkl. Entry, SL und TP"""
+    print(f"Analysiere Markt für {SYMBOL} (Buy & Sell)...")
+    
+    # 1. Kursdaten laden (Stunden-Kerzen der letzten 5 Tage)
+    df = yf.download(SYMBOL, period="5d", interval="1h", progress=False)
+    if df.empty:
+        print("Keine Daten erhalten.")
+        return
 
+    # MultiIndex-Spalten von yfinance bereinigen, falls vorhanden
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
 
-def main():
-  print("🤖 Führe XAUUSD M15 Preis-Signal Prüfung aus...")
-  data = check_gold_setup()
+    # 2. Bedingungen für Bullenflagge (BUY) & Bärenflagge (SELL)
+    # Mast-Berechnung (Veränderung über 5 Kerzen)
+    df['Impulse'] = (df['Close'] - df['Close'].shift(5)) / df['Close'].shift(5) * 100
+    
+    latest = df.iloc[-1]
+    prev = df.iloc[-2]
+    
+    # --- BULL FLAG (BUY) ---
+    is_bull_impulse = prev['Impulse'] > 1.5
+    bull_breakout = is_bull_impulse and (latest['Close'] > prev['High'])
+    
+    if bull_breakout:
+        entry = latest['Close']
+        stop_loss = prev['Low'] - 1.5          # SL knapp unter das Tief der Flagge
+        mast_height = prev['Close'] - df['Close'].shift(5)
+        take_profit = entry + mast_height       # TP in Höhe des Mastes nach oben
+        
+        msg = (
+            f"🟢 *BULL FLAG SIGNAL (BUY)* 🟢\n\n"
+            f"• **Asset:** Gold (XAUUSD / GC=F)\n"
+            f"• **Einstieg (Entry):** `{entry:.2f}`\n"
+            f"• **Stop-Loss (SL):** `{stop_loss:.2f}`\n"
+            f"• **Take-Profit (TP):** `{take_profit:.2f}`\n"
+            f"• **Zeit:** `{df.index[-1]}`"
+        )
+        send_telegram_message(msg)
+        return
 
-  if data:
-    report = (
-        f"⚡ <b>XAUUSD 15-MINUTEN SCALPING SIGNAL</b> ⚡\n"
-        f"-----------------------------------\n"
-        f"📊 Asset: {data['symbol']} ({data['timeframe']})\n"
-        f"• Signal: {data['signal']}\n"
-        f"• Empfehlung: {data['trade_advice']}\n\n"
-        f"• <b>Aktueller Preis:</b> ${data['price']}\n"
-        f"• <b>Einstiegspreis:</b> ${data['entry']}\n"
-        f"• <b>Stop-Loss (SL):</b> ${data['sl']}\n"
-        f"• <b>Take-Profit (TP):</b> ${data['tp']}\n"
-    )
-    send_telegram_message(report)
-  else:
-    print("⚠️ Warnung: Konnte keine aktuellen Daten abrufen.")
-    send_telegram_message(
-        "⚠️ XAUUSD Scalp Bot: Warnung - Konnte keine Marktdaten abrufen."
-    )
+    # --- BEAR FLAG (SELL) ---
+    is_bear_impulse = prev['Impulse'] < -1.5
+    bear_breakout = is_bear_impulse and (latest['Close'] < prev['Low'])
+    
+    if bear_breakout:
+        entry = latest['Close']
+        stop_loss = prev['High'] + 1.5         # SL knapp über das Hoch der Flagge
+        mast_height = abs(prev['Close'] - df['Close'].shift(5))
+        take_profit = entry - mast_height       # TP in Höhe des Mastes nach unten
+        
+        msg = (
+            f"🔴 *BEAR FLAG SIGNAL (SELL)* 🔴\n\n"
+            f"• **Asset:** Gold (XAUUSD / GC=F)\n"
+            f"• **Einstieg (Entry):** `{entry:.2f}`\n"
+            f"• **Stop-Loss (SL):** `{stop_loss:.2f}`\n"
+            f"• **Take-Profit (TP):** `{take_profit:.2f}`\n"
+            f"• **Zeit:** `{df.index[-1]}`"
+        )
+        send_telegram_message(msg)
+        return
 
+    print("Kein Signal (weder Buy noch Sell) im aktuellen Intervall.")
 
 if __name__ == "__main__":
-  main()
+    check_trading_signals()
