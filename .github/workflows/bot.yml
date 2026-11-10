@@ -2,8 +2,8 @@ name: Gold M15 Signal Bot
 
 on:
   schedule:
-    - cron: '*/15 * * * *'  # Läuft exakt alle 15 Minuten
-  workflow_dispatch:        # Erlaubt manuellen Start über GitHub
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 jobs:
   run-bot:
