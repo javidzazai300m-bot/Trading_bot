@@ -1,5 +1,4 @@
 from datetime import datetime
-import time
 import pandas as pd
 import requests
 import yfinance as yf
@@ -51,7 +50,7 @@ def check_gold_setup():
       print(f"⚠️ Zu wenig oder keine Daten geladen (Zeilen: {len(df)})")
       return None
 
-    # Indikatoren berechnen (EMA 20 & EMA 50 für reaktionsschnelle M15 Signale)
+    # Indikatoren berechnen (EMA 20 & EMA 50 für M15)
     df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
     df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
     df["ATR"] = calculate_atr(df)
@@ -104,56 +103,47 @@ def check_gold_setup():
 
 
 def main():
-  print(
-      "🤖 Starte M15 Gold-Bot (Sendet ununterbrochen alle 15 Minuten einen"
-      " Status)..."
-  )
+  current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+  print(f"\n[{current_time}] Starte M15 Gold-Analyse...")
 
-  while True:
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"\n[{current_time}] Führe M15 Analyse durch...")
+  data = check_gold_setup()
 
-    data = check_gold_setup()
+  if data:
+    print(
+        f"🔍 Preis: ${data['price']} | Signal: {data['signal']} | Trend:"
+        f" {data['trend']}"
+    )
 
-    if data:
-      print(
-          f"🔍 Preis: ${data['price']} | Signal: {data['signal']} | Trend:"
-          f" {data['trend']}"
-      )
+    # Grundreport zusammenbauen
+    report = (
+        f"📊 M15 UPDATE: GOLD STATUS 📊\n"
+        f"-----------------------------------\n"
+        f"• Asset: {data['symbol']} ({data['timeframe']})\n"
+        f"• Signal: {data['signal']}\n"
+        f"• Trend: {data['trend']}\n"
+        f"• Empfehlung: {data['trade_advice']}\n\n"
+        f"💵 Aktueller Preis: ${data['price']}\n"
+    )
 
-      # Grundreport wird IMMER zusammengebaut und gesendet
-      report = (
-          f"📊 M15 UPDATE: GOLD STATUS 📊\n"
-          f"-----------------------------------\n"
-          f"• Asset: {data['symbol']} ({data['timeframe']})\n"
-          f"• Signal: {data['signal']}\n"
-          f"• Trend: {data['trend']}\n"
-          f"• Empfehlung: {data['trade_advice']}\n\n"
-          f"💵 Aktueller Preis: ${data['price']}\n"
-      )
-
-      # SL und TP nur anhängen, wenn ein echtes Buy/Sell Signal vorliegt
-      if data["sl"] > 0:
-        report += (
-            f"🎯 Einstiegspreis: ${data['entry']}\n"
-            f"🛑 Stop-Loss (SL): ${data['sl']}\n"
-            f"🎯 Take-Profit (TP): ${data['tp']}\n\n"
-        )
-
+    # SL und TP nur anhängen, wenn ein echtes Buy/Sell Signal vorliegt
+    if data["sl"] > 0:
       report += (
-          f"• EMA 20: ${data['ema_20']} | EMA 50: ${data['ema_50']}\n"
-          f"🕒 Zeit: {current_time}"
+          f"🎯 Einstiegspreis: ${data['entry']}\n"
+          f"🛑 Stop-Loss (SL): ${data['sl']}\n"
+          f"🎯 Take-Profit (TP): ${data['tp']}\n\n"
       )
 
-      send_telegram_message(report)
-    else:
-      print("⚠️ Konnte keine Daten abrufen.")
-      send_telegram_message(
-          "⚠️ M15 Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
-      )
+    report += (
+        f"• EMA 20: ${data['ema_20']} | EMA 50: ${data['ema_50']}\n"
+        f"🕒 Zeit: {current_time}"
+    )
 
-    print("⏳ Warte 15 Minuten bis zur nächsten Analyse...")
-    time.sleep(900)
+    send_telegram_message(report)
+  else:
+    print("⚠️ Konnte keine Daten abrufen.")
+    send_telegram_message(
+        "⚠️ M15 Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
+    )
 
 
 if __name__ == "__main__":
