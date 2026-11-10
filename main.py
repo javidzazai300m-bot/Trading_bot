@@ -1,23 +1,15 @@
 from datetime import datetime
-import os
 import pandas as pd
 import requests
 import yfinance as yf
 
-# --- ZUGANGSDATEN AUS GITHUB SECRETS LADEN ---
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+# --- DEINE ZUGANGSDATEN ---
+TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
+TELEGRAM_CHAT_ID = "6551623158"
 
 
 def send_telegram_message(message_text):
   """Sendet die Nachricht an deinen Telegram-Chat."""
-  if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-    print(
-        "❌ Fehler: Telegram Token oder Chat-ID sind nicht als Umgebungsvariablen"
-        " gesetzt."
-    )
-    return
-
   url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
   payload = {
       "chat_id": TELEGRAM_CHAT_ID,
@@ -45,15 +37,14 @@ def calculate_atr(df, period=12):
 
 
 def check_gold_setup():
-  """Analysiert Gold auf dem M15-Timeframe mit Timeout-Schutz."""
+  """Analysiert Gold auf dem M15-Timeframe mit dynamischer EMA & ATR Logik."""
   ticker_symbol = "GC=F"  # Gold-Futures
   interval = "15m"
   period = "1mo"  # 1 Monat Historie garantiert genügend Kerzen für M15
 
   try:
-    print("⏳ Lade Marktdaten von yfinance...")
     ticker = yf.Ticker(ticker_symbol)
-    df = ticker.history(period=period, interval=interval, timeout=10)
+    df = ticker.history(period=period, interval=interval)
 
     if df.empty or len(df) < 50:
       print(f"⚠️ Zu wenig oder keine Daten geladen (Zeilen: {len(df)})")
@@ -107,7 +98,7 @@ def check_gold_setup():
     }
 
   except Exception as e:
-    print(f"❌ Fehler bei der Datenabfrage: {e}")
+    print(f"❌ Fehler bei der Gold-Analyse: {e}")
     return None
 
 
