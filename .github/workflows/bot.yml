@@ -2,8 +2,8 @@ name: Gold M15 Signal Bot
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
-  workflow_dispatch:
+    - cron: '*/15 * * * *'  # Läuft exakt alle 15 Minuten
+  workflow_dispatch:        # Erlaubt manuellen Start über GitHub
 
 jobs:
   run-bot:
@@ -21,4 +21,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Bot ausführen
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python main.py
