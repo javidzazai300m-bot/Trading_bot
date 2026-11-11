@@ -19,6 +19,7 @@ def send_telegram_message(message_text):
   payload = {
       "chat_id": TELEGRAM_CHAT_ID,
       "text": message_text,
+      "parse_mode": "Markdown",
   }
   try:
     response = requests.post(url, json=payload, timeout=10)
@@ -51,6 +52,10 @@ def check_gold_setup():
     ticker = yf.Ticker(ticker_symbol)
     df = ticker.history(period=period, interval=interval)
 
+    # WICHTIG: Manchmal liefert yfinance MultiIndex-Spalten, das hier fängt es ab
+    if isinstance(df.columns, pd.MultiIndex):
+      df.columns = df.columns.get_level_values(0)
+
     if df.empty or len(df) < 50:
       print(f"⚠️ Zu wenig oder keine Daten geladen (Zeilen: {len(df)})")
       return None
@@ -59,10 +64,16 @@ def check_gold_setup():
     df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
     df["ATR"] = calculate_atr(df)
 
-    current_price = df["Close"].iloc[-1]
-    ema_20 = df["EMA_20"].iloc[-1]
-    ema_50 = df["EMA_50"].iloc[-1]
-    atr = df["ATR"].iloc[-1]
+    # Letzte Zeile sicher abgreifen
+    current_price = float(df["Close"].iloc[-1])
+    ema_20 = float(df["EMA_20"].iloc[-1])
+    ema_50 = float(df["EMA_50"].iloc[-1])
+    atr = float(df["ATR"].iloc[-1])
+
+    # Auf NaN-Werte prüfen
+    if pd.isna(current_price) or pd.isna(ema_20) or pd.isna(ema_50):
+      print("⚠️ Berechnete Indikatoren enthalten NaN-Werte.")
+      return None
 
     if current_price > ema_20 and ema_20 > ema_50:
       trend = "BULLISH 🟢"
