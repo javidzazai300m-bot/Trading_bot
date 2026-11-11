@@ -1,15 +1,20 @@
 from datetime import datetime
+import os
 import pandas as pd
 import requests
 import yfinance as yf
 
-# --- DEINE ZUGANGSDATEN ---
-TELEGRAM_TOKEN = 8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc
-TELEGRAM_CHAT_ID = 6551623158
+# --- ZUGANGSDATEN AUS SICHEREN VARIABLEN LADEN ---
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 
 def send_telegram_message(message_text):
   """Sendet die Nachricht an deinen Telegram-Chat."""
+  if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+    print("❌ Telegram-Token oder Chat-ID nicht gefunden!")
+    return
+
   url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
   payload = {
       "chat_id": TELEGRAM_CHAT_ID,
@@ -40,7 +45,7 @@ def check_gold_setup():
   """Analysiert Gold auf dem M15-Timeframe mit dynamischer EMA & ATR Logik."""
   ticker_symbol = "GC=F"  # Gold-Futures
   interval = "15m"
-  period = "1mo"  # 1 Monat Historie garantiert genügend Kerzen für M15
+  period = "1mo"
 
   try:
     ticker = yf.Ticker(ticker_symbol)
@@ -50,7 +55,6 @@ def check_gold_setup():
       print(f"⚠️ Zu wenig oder keine Daten geladen (Zeilen: {len(df)})")
       return None
 
-    # Indikatoren berechnen (EMA 20 & EMA 50 für M15)
     df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
     df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
     df["ATR"] = calculate_atr(df)
@@ -60,7 +64,6 @@ def check_gold_setup():
     ema_50 = df["EMA_50"].iloc[-1]
     atr = df["ATR"].iloc[-1]
 
-    # Dynamische Trend- und Signal-Logik für M15
     if current_price > ema_20 and ema_20 > ema_50:
       trend = "BULLISH 🟢"
       signal = "BUY (LONG)"
@@ -114,7 +117,6 @@ def main():
         f" {data['trend']}"
     )
 
-    # Grundreport zusammenbauen
     report = (
         f"📊 M15 UPDATE: GOLD STATUS 📊\n"
         f"-----------------------------------\n"
@@ -125,7 +127,6 @@ def main():
         f"💵 Aktueller Preis: ${data['price']}\n"
     )
 
-    # SL und TP nur anhängen, wenn ein echtes Buy/Sell Signal vorliegt
     if data["sl"] > 0:
       report += (
           f"🎯 Einstiegspreis: ${data['entry']}\n"
