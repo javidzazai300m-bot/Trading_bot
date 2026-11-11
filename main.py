@@ -25,7 +25,7 @@ def send_telegram_message(message_text):
   try:
     response = requests.post(url, json=payload, timeout=10)
     response.raise_for_status()
-    print("✅ Signal erfolgreich an Telegram gesendet.")
+    print("✅ 15-Minuten-Update erfolgreich an Telegram gesendet.")
   except Exception as e:
     print(f"❌ Telegram-Fehler: {e}")
 
@@ -84,7 +84,7 @@ def check_gold_setup():
       take_profit = entry_price - (3.0 * atr)
     else:
       trend = "NEUTRAL / KORREKTUR 🟡"
-      signal = "KEIN KLARES SIGNAL"
+      signal = "KEIN KLARES SIGNAL (NEUTRAL)"
       trade_advice = "NEIN (Warten auf klaren Trend / Seitwärtsphase)"
       entry_price = current_price
       stop_loss = 0
@@ -109,8 +109,7 @@ def check_gold_setup():
 
 
 def main():
-  print("🚀 Gold-Bot gestartet und im Überwachungsmodus...")
-  last_signal = None  # Speichert das vorherige Signal
+  print("🚀 Gold-Bot gestartet: Sendet nun alle 15 Minuten ein Update...")
 
   while True:
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -124,43 +123,42 @@ def main():
           f" {data['trend']}"
       )
 
-      # Optionale Logik: Nachricht nur bei Signalwechsel senden oder bei jedem Intervall
-      # Hier senden wir eine Nachricht, wenn sich das Signal ändert ODER es ein echter Trade ist:
-      if data["signal"] != last_signal:
-        report = (
-            f"📊 M15 UPDATE: GOLD STATUS 📊\n"
-            f"-----------------------------------\n"
-            f"• Asset: {data['symbol']} ({data['timeframe']})\n"
-            f"• Signal: {data['signal']}\n"
-            f"• Trend: {data['trend']}\n"
-            f"• Empfehlung: {data['trade_advice']}\n\n"
-            f"💵 Aktueller Preis: ${data['price']}\n"
-        )
+      # Nachricht wird jetzt JEDES Mal (alle 15 Minuten) gesendet
+      report = (
+          f"📊 M15 UPDATE: GOLD STATUS 📊\n"
+          f"-----------------------------------\n"
+          f"• Asset: {data['symbol']} ({data['timeframe']})\n"
+          f"• Signal / Status: {data['signal']}\n"
+          f"• Trend: {data['trend']}\n"
+          f"• Empfehlung: {data['trade_advice']}\n\n"
+          f"💵 Aktueller Preis: ${data['price']}\n"
+      )
 
-        if data["sl"] > 0:
-          report += (
-              f"🎯 Einstiegspreis: ${data['entry']}\n"
-              f"🛑 Stop-Loss (SL): ${data['sl']}\n"
-              f"🎯 Take-Profit (TP): ${data['tp']}\n\n"
-          )
-
+      if data["sl"] > 0:
         report += (
-            f"• EMA 20: ${data['ema_20']} | EMA 50: ${data['ema_50']}\n"
-            f"🕒 Zeit: {current_time}"
+            f"🎯 Einstiegspreis: ${data['entry']}\n"
+            f"🛑 Stop-Loss (SL): ${data['sl']}\n"
+            f"🎯 Take-Profit (TP): ${data['tp']}\n\n"
+        )
+      else:
+        report += (
+            f"🎯 Einstiegspreis: ${data['entry']} (Kein Trade aktiv)\n\n"
         )
 
-        send_telegram_message(report)
-        last_signal = data["signal"]
-      else:
-        print(
-            "ℹ️ Signal unverändert – keine erneute Telegram-Nachricht"
-            " erforderlich."
-        )
+      report += (
+          f"• EMA 20: ${data['ema_20']} | EMA 50: ${data['ema_50']}\n"
+          f"🕒 Zeit: {current_time}"
+      )
+
+      send_telegram_message(report)
     else:
       print("⚠️ Konnte keine Daten abrufen.")
+      send_telegram_message(
+          "⚠️ M15 Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
+      )
 
-    # 300 Sekunden = 5 Minuten warten bis zur nächsten Prüfung
-    time.sleep(300)
+    # 900 Sekunden = Genau 15 Minuten warten
+    time.sleep(900)
 
 
 if __name__ == "__main__":
