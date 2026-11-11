@@ -24,7 +24,7 @@ def send_telegram_message(message_text):
   try:
     response = requests.post(url, json=payload, timeout=10)
     response.raise_for_status()
-    print("✅ 15-Minuten-Update erfolgreich an Telegram gesendet.")
+    print("✅ Telegram-Nachricht erfolgreich gesendet.")
   except Exception as e:
     print(f"❌ Telegram-Fehler: {e}")
 
@@ -40,21 +40,30 @@ def calculate_atr(df, period=12):
 
 
 def check_gold_setup():
-  """Analysiert XAUUSD auf dem M15-Timeframe über Yahoo Finance Spot-Daten."""
-  ticker_symbol = "XAUUSD=X"  # <--- Hier auf Spot-Gold umgestellt!
+  """Analysiert Gold mit einer Browser-Sitzung, um Blockaden zu verhindern."""
+  ticker_symbol = "GC=F"  # Gold Futures (stabil bei Yahoo Finance)
   interval = "15m"
-  period = "5d"  # 5 Tage reichen völlig aus für M15 Indikatoren
+  period = "5d"
 
+  print("🔄 Lade Marktdaten von Yahoo Finance...")
   try:
-    ticker = yf.Ticker(ticker_symbol)
+    # Erstelle eine Session, die sich als echter Browser ausgibt (verhindert Blockaden)
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,"
+            " like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
+    })
+
+    ticker = yf.Ticker(ticker_symbol, session=session)
     df = ticker.history(period=period, interval=interval)
 
-    # WICHTIG: MultiIndex-Spalten abfangen
     if isinstance(df.columns, pd.MultiIndex):
       df.columns = df.columns.get_level_values(0)
 
     if df.empty or len(df) < 50:
-      print(f"⚠️ Zu wenig oder keine Daten geladen (Zeilen: {len(df)})")
+      print(f"⚠️ Zu wenig Daten geladen (Zeilen: {len(df)})")
       return None
 
     df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
@@ -67,7 +76,7 @@ def check_gold_setup():
     atr = float(df["ATR"].iloc[-1])
 
     if pd.isna(current_price) or pd.isna(ema_20) or pd.isna(ema_50):
-      print("⚠️ Berechnete Indikatoren enthalten NaN-Werte.")
+      print("⚠️ Indikatoren enthalten NaN-Werte.")
       return None
 
     if current_price > ema_20 and ema_20 > ema_50:
@@ -93,7 +102,7 @@ def check_gold_setup():
       take_profit = 0
 
     return {
-        "symbol": "Spot Gold (XAUUSD=X)",
+        "symbol": "Gold Futures (GC=F)",
         "timeframe": "M15",
         "trend": trend,
         "signal": signal,
@@ -106,13 +115,13 @@ def check_gold_setup():
         "ema_50": round(ema_50, 2),
     }
   except Exception as e:
-    print(f"❌ Fehler bei der Analyse: {e}")
+    print(f"❌ Fehler beim Laden der Daten: {e}")
     return None
 
 
 def main():
   current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-  print(f"\n[{current_time}] Starte M15 XAUUSD-Analyse (GitHub Actions)...")
+  print(f"\n[{current_time}] Starte M15 Gold-Analyse...")
 
   data = check_gold_setup()
 
@@ -123,7 +132,7 @@ def main():
     )
 
     report = (
-        f"📊 M15 UPDATE: GOLD STATUS (XAUUSD) 📊\n"
+        f"📊 M15 UPDATE: GOLD STATUS 📊\n"
         f"-----------------------------------\n"
         f"• Asset: {data['symbol']} ({data['timeframe']})\n"
         f"• Signal / Status: {data['signal']}\n"
