@@ -1,6 +1,5 @@
 from datetime import datetime
 import os
-import time
 import pandas as pd
 import requests
 import yfinance as yf
@@ -41,19 +40,21 @@ def calculate_atr(df, period=12):
 
 
 def check_gold_setup():
-  """Analysiert Gold auf dem M15-Timeframe."""
-  ticker_symbol = "GC=F"
+  """Analysiert XAUUSD auf dem M15-Timeframe über Yahoo Finance Spot-Daten."""
+  ticker_symbol = "XAUUSD=X"  # <--- Hier auf Spot-Gold umgestellt!
   interval = "15m"
-  period = "1mo"
+  period = "5d"  # 5 Tage reichen völlig aus für M15 Indikatoren
 
   try:
     ticker = yf.Ticker(ticker_symbol)
     df = ticker.history(period=period, interval=interval)
 
+    # WICHTIG: MultiIndex-Spalten abfangen
     if isinstance(df.columns, pd.MultiIndex):
       df.columns = df.columns.get_level_values(0)
 
     if df.empty or len(df) < 50:
+      print(f"⚠️ Zu wenig oder keine Daten geladen (Zeilen: {len(df)})")
       return None
 
     df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
@@ -66,6 +67,7 @@ def check_gold_setup():
     atr = float(df["ATR"].iloc[-1])
 
     if pd.isna(current_price) or pd.isna(ema_20) or pd.isna(ema_50):
+      print("⚠️ Berechnete Indikatoren enthalten NaN-Werte.")
       return None
 
     if current_price > ema_20 and ema_20 > ema_50:
@@ -91,7 +93,7 @@ def check_gold_setup():
       take_profit = 0
 
     return {
-        "symbol": "Gold Futures (GC=F)",
+        "symbol": "Spot Gold (XAUUSD=X)",
         "timeframe": "M15",
         "trend": trend,
         "signal": signal,
@@ -109,56 +111,47 @@ def check_gold_setup():
 
 
 def main():
-  print("🚀 Gold-Bot gestartet: Sendet nun alle 15 Minuten ein Update...")
+  current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+  print(f"\n[{current_time}] Starte M15 XAUUSD-Analyse (GitHub Actions)...")
 
-  while True:
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"\n[{current_time}] Prüfe Gold-Setup...")
+  data = check_gold_setup()
 
-    data = check_gold_setup()
+  if data:
+    print(
+        f"🔍 Preis: ${data['price']} | Signal: {data['signal']} | Trend:"
+        f" {data['trend']}"
+    )
 
-    if data:
-      print(
-          f"🔍 Preis: ${data['price']} | Signal: {data['signal']} | Trend:"
-          f" {data['trend']}"
-      )
+    report = (
+        f"📊 M15 UPDATE: GOLD STATUS (XAUUSD) 📊\n"
+        f"-----------------------------------\n"
+        f"• Asset: {data['symbol']} ({data['timeframe']})\n"
+        f"• Signal / Status: {data['signal']}\n"
+        f"• Trend: {data['trend']}\n"
+        f"• Empfehlung: {data['trade_advice']}\n\n"
+        f"💵 Aktueller Preis: ${data['price']}\n"
+    )
 
-      # Nachricht wird jetzt JEDES Mal (alle 15 Minuten) gesendet
-      report = (
-          f"📊 M15 UPDATE: GOLD STATUS 📊\n"
-          f"-----------------------------------\n"
-          f"• Asset: {data['symbol']} ({data['timeframe']})\n"
-          f"• Signal / Status: {data['signal']}\n"
-          f"• Trend: {data['trend']}\n"
-          f"• Empfehlung: {data['trade_advice']}\n\n"
-          f"💵 Aktueller Preis: ${data['price']}\n"
-      )
-
-      if data["sl"] > 0:
-        report += (
-            f"🎯 Einstiegspreis: ${data['entry']}\n"
-            f"🛑 Stop-Loss (SL): ${data['sl']}\n"
-            f"🎯 Take-Profit (TP): ${data['tp']}\n\n"
-        )
-      else:
-        report += (
-            f"🎯 Einstiegspreis: ${data['entry']} (Kein Trade aktiv)\n\n"
-        )
-
+    if data["sl"] > 0:
       report += (
-          f"• EMA 20: ${data['ema_20']} | EMA 50: ${data['ema_50']}\n"
-          f"🕒 Zeit: {current_time}"
+          f"🎯 Einstiegspreis: ${data['entry']}\n"
+          f"🛑 Stop-Loss (SL): ${data['sl']}\n"
+          f"🎯 Take-Profit (TP): ${data['tp']}\n\n"
       )
-
-      send_telegram_message(report)
     else:
-      print("⚠️ Konnte keine Daten abrufen.")
-      send_telegram_message(
-          "⚠️ M15 Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
-      )
+      report += f"🎯 Einstiegspreis: ${data['entry']} (Kein Trade aktiv)\n\n"
 
-    # 900 Sekunden = Genau 15 Minuten warten
-    time.sleep(900)
+    report += (
+        f"• EMA 20: ${data['ema_20']} | EMA 50: ${data['ema_50']}\n"
+        f"🕒 Zeit: {current_time}"
+    )
+
+    send_telegram_message(report)
+  else:
+    print("⚠️ Konnte keine Daten abrufen.")
+    send_telegram_message(
+        "⚠️ M15 Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
+    )
 
 
 if __name__ == "__main__":
