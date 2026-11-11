@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+import time
 import pandas as pd
 import requests
 import yfinance as yf
@@ -25,15 +26,12 @@ def send_telegram_message(message_text):
     response = requests.post(url, json=payload, timeout=10)
     response.raise_for_status()
     print("✅ Signal erfolgreich an Telegram gesendet.")
-  except requests.exceptions.HTTPError as err:
-    print(f"❌ Telegram HTTP-Fehler: {err}")
-    print(f"Antwort von Telegram: {response.text}")
   except Exception as e:
-    print(f"❌ Netzwerk- oder unerwarteter Fehler: {e}")
+    print(f"❌ Telegram-Fehler: {e}")
 
 
 def calculate_atr(df, period=12):
-  """Berechnet die Average True Range (ATR) für die Volatilität."""
+  """Berechnet die Average True Range (ATR)."""
   high_low = df["High"] - df["Low"]
   high_close = (df["High"] - df["Close"].shift()).abs()
   low_close = (df["Low"] - df["Close"].shift()).abs()
@@ -43,8 +41,8 @@ def calculate_atr(df, period=12):
 
 
 def check_gold_setup():
-  """Analysiert Gold auf dem M15-Timeframe mit dynamischer EMA & ATR Logik."""
-  ticker_symbol = "GC=F"  # Gold-Futures
+  """Analysiert Gold auf dem M15-Timeframe."""
+  ticker_symbol = "GC=F"
   interval = "15m"
   period = "1mo"
 
@@ -52,27 +50,22 @@ def check_gold_setup():
     ticker = yf.Ticker(ticker_symbol)
     df = ticker.history(period=period, interval=interval)
 
-    # WICHTIG: Manchmal liefert yfinance MultiIndex-Spalten, das hier fängt es ab
     if isinstance(df.columns, pd.MultiIndex):
       df.columns = df.columns.get_level_values(0)
 
     if df.empty or len(df) < 50:
-      print(f"⚠️ Zu wenig oder keine Daten geladen (Zeilen: {len(df)})")
       return None
 
     df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
     df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
     df["ATR"] = calculate_atr(df)
 
-    # Letzte Zeile sicher abgreifen
     current_price = float(df["Close"].iloc[-1])
     ema_20 = float(df["EMA_20"].iloc[-1])
     ema_50 = float(df["EMA_50"].iloc[-1])
     atr = float(df["ATR"].iloc[-1])
 
-    # Auf NaN-Werte prüfen
     if pd.isna(current_price) or pd.isna(ema_20) or pd.isna(ema_50):
-      print("⚠️ Berechnete Indikatoren enthalten NaN-Werte.")
       return None
 
     if current_price > ema_20 and ema_20 > ema_50:
@@ -110,52 +103,64 @@ def check_gold_setup():
         "ema_20": round(ema_20, 2),
         "ema_50": round(ema_50, 2),
     }
-
   except Exception as e:
-    print(f"❌ Fehler bei der Gold-Analyse: {e}")
+    print(f"❌ Fehler bei der Analyse: {e}")
     return None
 
 
 def main():
-  current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-  print(f"\n[{current_time}] Starte M15 Gold-Analyse...")
+  print("🚀 Gold-Bot gestartet und im Überwachungsmodus...")
+  last_signal = None  # Speichert das vorherige Signal
 
-  data = check_gold_setup()
+  while True:
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"\n[{current_time}] Prüfe Gold-Setup...")
 
-  if data:
-    print(
-        f"🔍 Preis: ${data['price']} | Signal: {data['signal']} | Trend:"
-        f" {data['trend']}"
-    )
+    data = check_gold_setup()
 
-    report = (
-        f"📊 M15 UPDATE: GOLD STATUS 📊\n"
-        f"-----------------------------------\n"
-        f"• Asset: {data['symbol']} ({data['timeframe']})\n"
-        f"• Signal: {data['signal']}\n"
-        f"• Trend: {data['trend']}\n"
-        f"• Empfehlung: {data['trade_advice']}\n\n"
-        f"💵 Aktueller Preis: ${data['price']}\n"
-    )
-
-    if data["sl"] > 0:
-      report += (
-          f"🎯 Einstiegspreis: ${data['entry']}\n"
-          f"🛑 Stop-Loss (SL): ${data['sl']}\n"
-          f"🎯 Take-Profit (TP): ${data['tp']}\n\n"
+    if data:
+      print(
+          f"🔍 Preis: ${data['price']} | Signal: {data['signal']} | Trend:"
+          f" {data['trend']}"
       )
 
-    report += (
-        f"• EMA 20: ${data['ema_20']} | EMA 50: ${data['ema_50']}\n"
-        f"🕒 Zeit: {current_time}"
-    )
+      # Optionale Logik: Nachricht nur bei Signalwechsel senden oder bei jedem Intervall
+      # Hier senden wir eine Nachricht, wenn sich das Signal ändert ODER es ein echter Trade ist:
+      if data["signal"] != last_signal:
+        report = (
+            f"📊 M15 UPDATE: GOLD STATUS 📊\n"
+            f"-----------------------------------\n"
+            f"• Asset: {data['symbol']} ({data['timeframe']})\n"
+            f"• Signal: {data['signal']}\n"
+            f"• Trend: {data['trend']}\n"
+            f"• Empfehlung: {data['trade_advice']}\n\n"
+            f"💵 Aktueller Preis: ${data['price']}\n"
+        )
 
-    send_telegram_message(report)
-  else:
-    print("⚠️ Konnte keine Daten abrufen.")
-    send_telegram_message(
-        "⚠️ M15 Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
-    )
+        if data["sl"] > 0:
+          report += (
+              f"🎯 Einstiegspreis: ${data['entry']}\n"
+              f"🛑 Stop-Loss (SL): ${data['sl']}\n"
+              f"🎯 Take-Profit (TP): ${data['tp']}\n\n"
+          )
+
+        report += (
+            f"• EMA 20: ${data['ema_20']} | EMA 50: ${data['ema_50']}\n"
+            f"🕒 Zeit: {current_time}"
+        )
+
+        send_telegram_message(report)
+        last_signal = data["signal"]
+      else:
+        print(
+            "ℹ️ Signal unverändert – keine erneute Telegram-Nachricht"
+            " erforderlich."
+        )
+    else:
+      print("⚠️ Konnte keine Daten abrufen.")
+
+    # 300 Sekunden = 5 Minuten warten bis zur nächsten Prüfung
+    time.sleep(300)
 
 
 if __name__ == "__main__":
