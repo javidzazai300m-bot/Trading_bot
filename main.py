@@ -4,8 +4,8 @@ import requests
 import yfinance as yf
 
 # --- DEINE ZUGANGSDATEN ---
-TELEGRAM_TOKEN = "8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc"
-TELEGRAM_CHAT_ID = "6551623158"
+TELEGRAM_TOKEN = 8909211837:AAGrhWS1umeFkIFkzbQlnuvmaP6eCGhiLVc
+TELEGRAM_CHAT_ID = 6551623158
 
 
 def send_telegram_message(message_text):
