@@ -2,8 +2,12 @@ name: Gold M15 Signal Bot
 
 on:
   schedule:
+    # Läuft automatisch alle 15 Minuten (in UTC-Zeit)
     - cron: '*/15 * * * *'
-  workflow_dispatch:
+  workflow_dispatch: # Erlaubt weiterhin den manuellen Start zum Testen
+
+permissions:
+  contents: read
 
 jobs:
   run-bot:
