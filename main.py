@@ -40,12 +40,14 @@ def calculate_atr(df, period=12):
 
 
 def check_gold_setup():
-  """Analysiert Gold mit einer Browser-Sitzung, um Blockaden zu verhindern."""
+  """Analysiert Gold im H1-Zeitfenster."""
   ticker_symbol = "GC=F"  # Gold Futures (stabil bei Yahoo Finance)
-  interval = "15m"
-  period = "5d"
+  interval = "1h"  # Geändert von '15m' auf '1h' (H1)
+  period = (
+      "30d"  # Auf 30 Tage erhöht, damit EMA 50 im H1 genügend Daten hat
+  )
 
-  print("🔄 Lade Marktdaten von Yahoo Finance...")
+  print("🔄 Lade H1-Marktdaten von Yahoo Finance...")
   try:
     # Erstelle eine Session, die sich als echter Browser ausgibt (verhindert Blockaden)
     session = requests.Session()
@@ -82,14 +84,14 @@ def check_gold_setup():
     if current_price > ema_20 and ema_20 > ema_50:
       trend = "BULLISH 🟢"
       signal = "BUY (LONG)"
-      trade_advice = "JA (Aufwärtstrend im M15 - Long Einstieg)"
+      trade_advice = "JA (Aufwärtstrend im H1 - Long Einstieg)"
       entry_price = current_price
       stop_loss = entry_price - (1.5 * atr)
       take_profit = entry_price + (3.0 * atr)
     elif current_price < ema_20 and ema_20 < ema_50:
       trend = "BEARISH 🔴"
       signal = "SELL (SHORT)"
-      trade_advice = "JA (Abwärtstrend im M15 - Short Einstieg)"
+      trade_advice = "JA (Abwärtstrend im H1 - Short Einstieg)"
       entry_price = current_price
       stop_loss = entry_price + (1.5 * atr)
       take_profit = entry_price - (3.0 * atr)
@@ -103,7 +105,7 @@ def check_gold_setup():
 
     return {
         "symbol": "Gold Futures (GC=F)",
-        "timeframe": "M15",
+        "timeframe": "H1",  # Angepasst auf H1
         "trend": trend,
         "signal": signal,
         "trade_advice": trade_advice,
@@ -121,7 +123,7 @@ def check_gold_setup():
 
 def main():
   current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-  print(f"\n[{current_time}] Starte M15 Gold-Analyse...")
+  print(f"\n[{current_time}] Starte H1 Gold-Analyse...")
 
   data = check_gold_setup()
 
@@ -132,7 +134,7 @@ def main():
     )
 
     report = (
-        f"📊 M15 UPDATE: GOLD STATUS 📊\n"
+        f"📊 H1 UPDATE: GOLD STATUS 📊\n"  # Angepasst auf H1
         f"-----------------------------------\n"
         f"• Asset: {data['symbol']} ({data['timeframe']})\n"
         f"• Signal / Status: {data['signal']}\n"
@@ -159,7 +161,7 @@ def main():
   else:
     print("⚠️ Konnte keine Daten abrufen.")
     send_telegram_message(
-        "⚠️ M15 Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
+        "⚠️ H1 Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
     )
 
 
