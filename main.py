@@ -41,15 +41,13 @@ def calculate_atr(df, period=12):
 
 def check_gold_setup():
   """Analysiert Gold im H1-Zeitfenster."""
-  ticker_symbol = "GC=F"  # Gold Futures (stabil bei Yahoo Finance)
-  interval = "1h"  # Geändert von '15m' auf '1h' (H1)
-  period = (
-      "30d"  # Auf 30 Tage erhöht, damit EMA 50 im H1 genügend Daten hat
-  )
+  ticker_symbol = "GC=F"  # Gold Futures
+  interval = "1h"  # H1 Zeitfenster
+  period = "30d"  # 30 Tage Historie für stabile EMAs
 
   print("🔄 Lade H1-Marktdaten von Yahoo Finance...")
   try:
-    # Erstelle eine Session, die sich als echter Browser ausgibt (verhindert Blockaden)
+    # Session mit Browser-User-Agent gegen Blockaden
     session = requests.Session()
     session.headers.update({
         "User-Agent": (
@@ -81,14 +79,19 @@ def check_gold_setup():
       print("⚠️ Indikatoren enthalten NaN-Werte.")
       return None
 
-    if current_price > ema_20 and ema_20 > ema_50:
+    # --- VERBESSERTE TREND-LOGIK ---
+    # Prüft, ob der EMA 20 über dem EMA 50 liegt und der Preis über dem EMA 50 (verhindert falsche Shorts bei kleinen Rücksetzern)
+    ema_slope_bullish = ema_20 > ema_50
+    price_above_support = current_price > ema_50
+
+    if ema_slope_bullish and price_above_support:
       trend = "BULLISH 🟢"
       signal = "BUY (LONG)"
       trade_advice = "JA (Aufwärtstrend im H1 - Long Einstieg)"
       entry_price = current_price
       stop_loss = entry_price - (1.5 * atr)
       take_profit = entry_price + (3.0 * atr)
-    elif current_price < ema_20 and ema_20 < ema_50:
+    elif not ema_slope_bullish and current_price < ema_50:
       trend = "BEARISH 🔴"
       signal = "SELL (SHORT)"
       trade_advice = "JA (Abwärtstrend im H1 - Short Einstieg)"
@@ -105,7 +108,7 @@ def check_gold_setup():
 
     return {
         "symbol": "Gold Futures (GC=F)",
-        "timeframe": "H1",  # Angepasst auf H1
+        "timeframe": "H1",
         "trend": trend,
         "signal": signal,
         "trade_advice": trade_advice,
@@ -134,7 +137,7 @@ def main():
     )
 
     report = (
-        f"📊 H1 UPDATE: GOLD STATUS 📊\n"  # Angepasst auf H1
+        f"📊 H1 UPDATE: GOLD STATUS 📊\n"
         f"-----------------------------------\n"
         f"• Asset: {data['symbol']} ({data['timeframe']})\n"
         f"• Signal / Status: {data['signal']}\n"
