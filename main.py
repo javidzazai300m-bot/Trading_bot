@@ -11,9 +11,9 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 STATE_FILE = "last_signal_state.json"
 
 # --- YAHOO FINANCE TICKER ---
-GOLD_TICKER = "GC=F"        # Gold Futures (alternativ XAUUSD=X)
-DXY_TICKER = "DX-Y.NYB"     # US Dollar Index (DXY)
-US10Y_TICKER = "^TNX"       # 10-jährige US-Staatsanleihen Rendite (US10Y)
+GOLD_TICKER = "GC=F"  # Gold Futures (alternativ XAUUSD=X)
+DXY_TICKER = "DX-Y.NYB"  # US Dollar Index (DXY)
+US10Y_TICKER = "^TNX"  # 10-jährige US-Staatsanleihen Rendite (US10Y)
 
 
 def send_telegram_message(message_text):
@@ -75,7 +75,7 @@ def download_h1_data(ticker, period="30d", interval="1h"):
 
 
 def analyze_direction(df):
-  """Prüft für DXY oder US10Y, ob der Wert im H1-Chart steigt oder fällt."""
+  """Prüft für DXY oder US10Y, ob der Wert im H1-Chart steigt, fällt oder neutral ist."""
   if df.empty or len(df) < 25:
     return None
 
@@ -90,8 +90,6 @@ def analyze_direction(df):
   if pd.isna(current_val) or pd.isna(prev_val) or pd.isna(ema_20):
     return None
 
-  change_pct = ((current_val - prev_val) / prev_val) * 100
-
   is_falling = (current_val < prev_val) and (
       ema_20 < ema_20_prev or current_val < ema_20
   )
@@ -99,26 +97,14 @@ def analyze_direction(df):
       ema_20 > ema_20_prev or current_val > ema_20
   )
 
-  if is_falling:
-    direction = "FALLEND 🔴"
-  elif is_rising:
-    direction = "STEIGEND 🟢"
-  else:
-    direction = "NEUTRAL 🟡"
-
   return {
-      "current": current_val,
-      "prev": prev_val,
-      "change_pct": round(change_pct, 2),
-      "ema_20": ema_20,
       "is_falling": is_falling,
       "is_rising": is_rising,
-      "direction": direction,
   }
 
 
-def check_macro_gold_setup():
-  """Analysiert DXY und US10Y im H1-Chart und leitet das Gold-Signal ab."""
+def check_gold_signal():
+  """Ermittelt ein BUY-, SELL- oder NEUTRAL-Signal inkl. aktuellem Preis, Einstieg, SL und TP."""
   print("🔄 Lade H1-Marktdaten für DXY, US10Y und Gold...")
   try:
     df_dxy = download_h1_data(DXY_TICKER)
@@ -137,59 +123,40 @@ def check_macro_gold_setup():
       return None
 
     df_gold["ATR"] = calculate_atr(df_gold)
-    gold_price = float(df_gold["Close"].iloc[-1])
-    gold_prev = float(df_gold["Close"].iloc[-2])
+    current_price = float(df_gold["Close"].iloc[-1])
     gold_atr = float(df_gold["ATR"].iloc[-1])
 
-    if pd.isna(gold_price) or pd.isna(gold_atr):
+    if pd.isna(current_price) or pd.isna(gold_atr):
       print("⚠️ Gold-Preis oder ATR ist NaN.")
       return None
 
-    # --- MAKRO-LOGIK: DXY + US10Y ---
-    # Beide fallen -> Rückenwind für Gold -> BUY
+    entry_price = current_price
+
+    # DXY & US10Y fallen -> BUY
     if dxy["is_falling"] and us10y["is_falling"]:
-      trend = "BULLISCH FÜR GOLD 🟢 (DXY & US10Y fallen)"
       signal = "BUY"
-      trade_advice = "JA (DXY fällt + US10Y fällt → BUY Signal)"
-      entry_price = gold_price
-      stop_loss = entry_price - (1.5 * gold_atr)
-      take_profit = entry_price + (3.0 * gold_atr)
+      stop_loss = round(entry_price - (1.5 * gold_atr), 2)
+      take_profit = round(entry_price + (3.0 * gold_atr), 2)
 
-    # Beide steigen -> Gegenwind für Gold -> SELL
+    # DXY & US10Y steigen -> SELL
     elif dxy["is_rising"] and us10y["is_rising"]:
-      trend = "BÄRISCH FÜR GOLD 🔴 (DXY & US10Y steigen)"
       signal = "SELL"
-      trade_advice = "JA (DXY steigt + US10Y steigt → SELL Signal)"
-      entry_price = gold_price
-      stop_loss = entry_price + (1.5 * gold_atr)
-      take_profit = entry_price - (3.0 * gold_atr)
+      stop_loss = round(entry_price + (1.5 * gold_atr), 2)
+      take_profit = round(entry_price - (3.0 * gold_atr), 2)
 
-    # Gemischte Signale -> Abwarten
+    # Alles andere -> NEUTRAL
     else:
-      trend = "GEMISCHT / UNKLAR 🟡"
       signal = "NEUTRAL"
-      trade_advice = "NEIN (DXY und US10Y laufen nicht gleich)"
-      entry_price = gold_price
-      stop_loss = 0
-      take_profit = 0
+      stop_loss = None
+      take_profit = None
 
     return {
         "symbol": "Gold Futures (GC=F)",
-        "timeframe": "H1",
-        "trend": trend,
         "signal": signal,
-        "trade_advice": trade_advice,
-        "gold_price": round(gold_price, 2),
-        "gold_prev": round(gold_prev, 2),
-        "entry": round(entry_price, 2),
-        "sl": round(stop_loss, 2),
-        "tp": round(take_profit, 2),
-        "dxy_val": round(dxy["current"], 2),
-        "dxy_pct": dxy["change_pct"],
-        "dxy_dir": dxy["direction"],
-        "us10y_val": round(us10y["current"], 3),
-        "us10y_pct": us10y["change_pct"],
-        "us10y_dir": us10y["direction"],
+        "current_price": round(current_price, 2),
+        "entry_price": round(entry_price, 2),
+        "sl": stop_loss,
+        "tp": take_profit,
     }
   except Exception as e:
     print(f"❌ Fehler beim Laden/Analysieren der Daten: {e}")
@@ -198,51 +165,43 @@ def check_macro_gold_setup():
 
 def main():
   current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-  print(f"\n[{current_time}] Starte H1 Makro-Analyse (DXY + US10Y → Gold)...")
+  print(f"\n[{current_time}] Starte H1 Gold-Signal-Prüfung (BUY / SELL / NEUTRAL)...")
 
-  data = check_macro_gold_setup()
+  data = check_gold_signal()
 
   if data:
     last_signal = load_last_signal()
-    current_signal = data["signal"]
+    signal = data["signal"]
+
+    sl_text = f"${data['sl']}" if data["sl"] is not None else "–"
+    tp_text = f"${data['tp']}" if data["tp"] is not None else "–"
 
     print(
-        f"🔍 DXY: {data['dxy_val']} ({data['dxy_dir']}) | "
-        f"US10Y: {data['us10y_val']}% ({data['us10y_dir']}) | "
-        f"Gold: ${data['gold_price']} → Signal: {current_signal}"
+        f"🔍 Signal: {signal} | Aktuell: ${data['current_price']} | "
+        f"Einstieg: ${data['entry_price']} | SL: {sl_text} | TP: {tp_text}"
     )
 
-    # Nur senden, wenn BUY oder SELL vorliegt UND sich das Signal geändert hat
-    if current_signal in ("BUY", "SELL") and current_signal != last_signal:
+    if signal != last_signal:
+      emoji_map = {"BUY": "🟢", "SELL": "🔴", "NEUTRAL": "🟡"}
+      emoji = emoji_map.get(signal, "⚪")
+
       report = (
-          f"<b>📊 H1 MAKRO-GOLD SIGNAL: {current_signal} 📊</b>\n"
-          f"-----------------------------------\n"
-          f"• <b>Asset:</b> {data['symbol']} ({data['timeframe']})\n"
-          f"• <b>Signal:</b> {current_signal}\n"
-          f"• <b>Makro-Lage:</b> {data['trend']}\n"
-          f"• <b>Empfehlung:</b> {data['trade_advice']}\n\n"
-          f"💵 <b>DXY:</b> {data['dxy_val']} ({data['dxy_pct']:+}%)"
-          f" [{data['dxy_dir']}]\n"
-          f"📈 <b>US10Y:</b> {data['us10y_val']}% ({data['us10y_pct']:+}%)"
-          f" [{data['us10y_dir']}]\n\n"
-          f"🥇 <b>Gold Preis:</b> ${data['gold_price']} (Vorher:"
-          f" ${data['gold_prev']})\n"
-          f"🎯 <b>Einstiegspreis:</b> ${data['entry']}\n"
-          f"🛑 <b>Stop-Loss (SL):</b> ${data['sl']}\n"
-          f"🎯 <b>Take-Profit (TP):</b> ${data['tp']}\n\n"
-          f"🕒 <b>Zeit:</b> {current_time}"
+          f"{emoji} <b>GOLD SIGNAL: {signal}</b>\n"
+          f"Asset: {data['symbol']}\n"
+          f"Aktueller Preis: <b>${data['current_price']}</b>\n"
+          f"Einstiegspreis: <b>${data['entry_price']}</b>\n"
+          f"Stop-Loss (SL): <b>{sl_text}</b>\n"
+          f"Take-Profit (TP): <b>{tp_text}</b>\n"
+          f"Zeit: {current_time}"
       )
       send_telegram_message(report)
-      save_last_signal(current_signal)
-    elif current_signal == "NEUTRAL":
-      print("ℹ️ DXY & US10Y uneinheitlich – kein BUY/SELL-Signal gesendet.")
-      save_last_signal("NEUTRAL")
+      save_last_signal(signal)
     else:
-      print(f"ℹ️ Signal '{current_signal}' bereits gesendet – keine Doppelmeldung.")
+      print(f"ℹ️ Signal '{signal}' ist bereits aktiv – keine Doppelmeldung.")
   else:
     print("⚠️ Konnte keine Daten abrufen.")
     send_telegram_message(
-        "⚠️ H1 Gold-Bot: Warnung - Konnte DXY/US10Y/Gold-Daten nicht abrufen."
+        "⚠️ Gold-Bot: Warnung – Konnte Marktdaten nicht abrufen."
     )
 
 
