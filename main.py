@@ -19,7 +19,7 @@ def get_spot_gold_data(
     ticker_symbol: str = "XAUUSD=X", interval: str = "15m", period: str = "5d"
 ) -> pd.DataFrame | None:
   """Lädt Spot-Gold-Daten (XAUUSD) über Yahoo Finance."""
-  print(f"🔄 Lade Marktdaten für {ticker_symbol} ({interval})...")
+  print(f"Lade Marktdaten fuer {ticker_symbol} ({interval})...")
   try:
     session = requests.Session()
     session.headers.update({
@@ -36,12 +36,12 @@ def get_spot_gold_data(
       df.columns = df.columns.get_level_values(0)
 
     if df.empty or len(df) < 50:
-      print(f"⚠️ Zu wenig Daten geladen (Zeilen: {len(df)})")
+      print(f"Zu wenig Daten geladen (Zeilen: {len(df)})")
       return None
 
     return df
   except Exception as e:
-    print(f"❌ Fehler beim Laden der Daten: {e}")
+    print(f"Fehler beim Laden der Daten: {e}")
     return None
 
 
@@ -67,27 +67,27 @@ def check_gold_setup() -> dict | None:
       or pd.isna(ema_50)
       or pd.isna(atr)
   ):
-    print("⚠️ Indikatoren enthalten NaN-Werte.")
+    print("Indikatoren enthalten NaN-Werte.")
     return None
 
   entry_price = current_price
 
   if current_price > ema_20 and ema_20 > ema_50:
-    trend = "BULLISH 🟢"
+    trend = "BULLISH (Gruen)"
     signal = "BUY (LONG)"
-    trade_advice = "JA (Aufwärtstrend im M15 - Long Einstieg)"
+    trade_advice = "JA (Aufwaertstrend im M15 - Long Einstieg)"
     stop_loss = entry_price - (1.5 * atr)
     take_profit = entry_price + (3.0 * atr)
   elif current_price < ema_20 and ema_20 < ema_50:
-    trend = "BEARISH 🔴"
+    trend = "BEARISH (Rot)"
     signal = "SELL (SHORT)"
-    trade_advice = "JA (Abwärtstrend im M15 - Short Einstieg)"
+    trade_advice = "JA (Abwaertstrend im M15 - Short Einstieg)"
     stop_loss = entry_price + (1.5 * atr)
     take_profit = entry_price - (3.0 * atr)
   else:
-    trend = "NEUTRAL / KORREKTUR 🟡"
+    trend = "NEUTRAL / KORREKTUR (Gelb)"
     signal = "KEIN KLARES SIGNAL (NEUTRAL)"
-    trade_advice = "NEIN (Warten auf klaren Trend / Seitwärtsphase)"
+    trade_advice = "NEIN (Warten auf klaren Trend / Seitwaertsphase)"
     stop_loss = 0.0
     take_profit = 0.0
 
@@ -107,12 +107,12 @@ def check_gold_setup() -> dict | None:
 
 
 def send_telegram_message(message_text: str) -> None:
-  """Sendet die Nachricht an Telegram über Umgebungsvariablen (Secrets)."""
+  """Sendet die Nachricht an Telegram ueber Umgebungsvariablen (Secrets)."""
   token = os.getenv("TELEGRAM_TOKEN")
   chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
   if not token or not chat_id:
-    print("ℹ️ Keine Telegram-Secrets gesetzt – Ausgabe nur in der Konsole.")
+    print("Keine Telegram-Secrets gesetzt - Ausgabe nur in der Konsole.")
     return
 
   url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -123,12 +123,61 @@ def send_telegram_message(message_text: str) -> None:
   try:
     response = requests.post(url, json=payload, timeout=10)
     response.raise_for_status()
-    print("✅ Telegram-Nachricht erfolgreich gesendet.")
+    print("Telegram-Nachricht erfolgreich gesendet.")
   except Exception as e:
-    print(f"❌ Telegram-Fehler: {e}")
+    print(f"Telegram-Fehler: {e}")
 
 
 def format_report(data: dict, current_time: str) -> str:
-  """Formatiert den Analysebericht für Konsole und Telegram."""
-  report = (
-      "\n📊 M15 UPDATE: GOLD
+  """Formatiert den Analysebericht fuer Konsole und Telegram."""
+  lines = [
+      "",
+      "M15 UPDATE: GOLD STATUS",
+      "-----------------------------------",
+      f"- Asset: {data['symbol']} ({data['timeframe']})",
+      f"- Signal / Status: {data['signal']}",
+      f"- Trend: {data['trend']}",
+      f"- Empfehlung: {data['trade_advice']}",
+      "",
+      f"Aktueller Preis: ${data['price']}",
+  ]
+
+  if data["sl"] > 0:
+    lines.extend([
+        f"Einstiegspreis: ${data['entry']}",
+        f"Stop-Loss (SL): ${data['sl']}",
+        f"Take-Profit (TP): ${data['tp']}",
+        "",
+    ])
+  else:
+    lines.extend([
+        f"Einstiegspreis: ${data['entry']} (Kein Trade aktiv)",
+        "",
+    ])
+
+  lines.extend([
+      f"- EMA 20: ${data['ema_20']} | EMA 50: ${data['ema_50']}",
+      f"Zeit: {current_time}",
+  ])
+  return "\n".join(lines)
+
+
+def main() -> None:
+  current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+  print(f"\n[{current_time}] Starte M15 Gold-Analyse...")
+
+  data = check_gold_setup()
+
+  if data:
+    report = format_report(data, current_time)
+    print(report)
+    send_telegram_message(report)
+  else:
+    print("Konnte keine Daten abrufen.")
+    send_telegram_message(
+        "M15 Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
+    )
+
+
+if __name__ == "__main__":
+  main()
