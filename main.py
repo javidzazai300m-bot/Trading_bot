@@ -8,7 +8,9 @@ import yfinance as yf
 # --- ZUGANGSDATEN AUS SICHEREN VARIABLEN LADEN ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-STATE_FILE = "last_signal_state.json"
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATE_FILE = os.path.join(BASE_DIR, "last_signal_state.json")
 
 # --- YAHOO FINANCE TICKER ---
 GOLD_TICKER = "GC=F"  # Gold Futures (alternativ XAUUSD=X)
@@ -19,6 +21,7 @@ US10Y_TICKER = "^TNX"  # 10-jährige US-Staatsanleihen Rendite (US10Y)
 # 2 = mindestens 2 aus 3 Faktoren müssen passen (z. B. Gold steigt + DXY fällt)
 # 3 = alle 3 Faktoren müssen gleichzeitig passen (strenger, seltener)
 MIN_CONFIRMATIONS = 2
+PRICE_UPDATE_THRESHOLD = 15.0  # Zusätzliche Meldung bei >= 15 $ Kursänderung
 
 
 def send_telegram_message(message_text):
@@ -41,22 +44,34 @@ def send_telegram_message(message_text):
     print(f"❌ Telegram-Fehler: {e}")
 
 
-def load_last_signal():
-  """Lädt das zuletzt gesendete Signal, um doppelte Meldungen zu vermeiden."""
+def load_last_state():
+  """Lädt den zuletzt gespeicherten Signal- und Preisstatus."""
   if os.path.exists(STATE_FILE):
     try:
       with open(STATE_FILE, "r", encoding="utf-8") as f:
-        return json.load(f).get("last_signal")
+        data = json.load(f)
+        return {
+            "last_signal": data.get("last_signal"),
+            "last_price": data.get("last_price"),
+        }
     except Exception:
-      return None
-  return None
+      return {"last_signal": None, "last_price": None}
+  return {"last_signal": None, "last_price": None}
 
 
-def save_last_signal(signal):
-  """Speichert das aktuelle Signal."""
+def save_last_state(signal, price):
+  """Speichert das aktuelle Signal und den letzten Preis."""
   try:
     with open(STATE_FILE, "w", encoding="utf-8") as f:
-      json.dump({"last_signal": signal}, f)
+      json.dump(
+          {
+              "last_signal": signal,
+              "last_price": price,
+              "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+          },
+          f,
+          indent=2,
+      )
   except Exception as e:
     print(f"⚠️ Konnte Signal-Status nicht speichern: {e}")
 
@@ -82,6 +97,34 @@ def download_h1_data(ticker, period="30d", interval="1h"):
   return df
 
 
+def get_live_price(ticker):
+  """Holt den aktuellsten Preis aus 30-Minuten-Kerzen (30m) inkl. Zeitstempel."""
+  try:
+    df_30m = yf.download(ticker, period="5d", interval="30m", progress=False)
+    if df_30m is None or df_30m.empty:
+      return None, None
+    if isinstance(df_30m.columns, pd.MultiIndex):
+      df_30m.columns = df_30m.columns.get_level_values(0)
+    df_30m = df_30m.dropna(subset=["Close"])
+    if df_30m.empty:
+      return None, None
+
+    last_price = float(df_30m["Close"].iloc[-1])
+    if pd.isna(last_price):
+      return None, None
+
+    ts = df_30m.index[-1]
+    if hasattr(ts, "tzinfo") and ts.tzinfo is not None:
+      ts_str = ts.tz_convert("Europe/Berlin").strftime("%Y-%m-%d %H:%M:%S")
+    else:
+      ts_str = ts.strftime("%Y-%m-%d %H:%M:%S")
+
+    return last_price, ts_str
+  except Exception as e:
+    print(f"⚠️ Konnte 30m-Kurs nicht laden: {e}")
+    return None, None
+
+
 def analyze_trend(df):
   """Analysiert den Trend auf Basis der letzten abgeschlossenen H1-Kerze (iloc[-2])."""
   if df.empty or len(df) < 26:
@@ -99,11 +142,11 @@ def analyze_trend(df):
   if any(pd.isna(x) for x in (close_closed, prev_closed, ema_closed, ema_prev)):
     return None
 
-  # Bullisch: Kurs über EMA-20 oder Momentum nach oben + EMA steigt
+  # Bullisch: Kurs über EMA-20 und (EMA steigt oder Momentum nach oben)
   bullish = (close_closed > ema_closed) and (
       ema_closed >= ema_prev or close_closed > prev_closed
   )
-  # Bearisch: Kurs unter EMA-20 oder Momentum nach unten + EMA fällt
+  # Bearisch: Kurs unter EMA-20 und (EMA fällt oder Momentum nach unten)
   bearish = (close_closed < ema_closed) and (
       ema_closed <= ema_prev or close_closed < prev_closed
   )
@@ -135,8 +178,19 @@ def check_gold_signal():
     df_gold = df_gold.copy()
     df_gold["ATR"] = calculate_atr(df_gold)
 
-    # Aktueller Kurs für den Einstieg, ATR aus abgeschlossener Kerze
-    current_price = float(df_gold["Close"].iloc[-1])
+    # Frischen Kurs über 30m-Daten holen, Fallback auf H1
+    live_price, price_time = get_live_price(GOLD_TICKER)
+    if live_price is not None:
+      current_price = live_price
+    else:
+      current_price = float(df_gold["Close"].iloc[-1])
+      ts_h1 = df_gold.index[-1]
+      price_time = (
+          ts_h1.tz_convert("Europe/Berlin").strftime("%Y-%m-%d %H:%M:%S")
+          if hasattr(ts_h1, "tzinfo") and ts_h1.tzinfo is not None
+          else str(ts_h1)
+      )
+
     gold_atr = float(df_gold["ATR"].iloc[-2])
 
     if pd.isna(current_price) or pd.isna(gold_atr) or gold_atr <= 0:
@@ -181,6 +235,7 @@ def check_gold_signal():
         "entry_price": round(entry_price, 2),
         "sl": stop_loss,
         "tp": take_profit,
+        "price_time": price_time,
     }
   except Exception as e:
     print(f"❌ Fehler beim Laden/Analysieren der Daten: {e}")
@@ -193,43 +248,18 @@ def main():
 
   data = check_gold_signal()
 
-  if data:
-    last_signal = load_last_signal()
-    signal = data["signal"]
-
-    sl_text = f"${data['sl']}" if data["sl"] is not None else "–"
-    tp_text = f"${data['tp']}" if data["tp"] is not None else "–"
-    score_text = f"BUY {data['buy_votes']}/3 | SELL {data['sell_votes']}/3"
-
-    print(
-        f"🔍 Signal: {signal} ({score_text}) | Aktuell: ${data['current_price']} | "
-        f"Einstieg: ${data['entry_price']} | SL: {sl_text} | TP: {tp_text}"
-    )
-
-    if signal != last_signal:
-      emoji_map = {"BUY": "🟢", "SELL": "🔴", "NEUTRAL": "🟡"}
-      emoji = emoji_map.get(signal, "⚪")
-
-      report = (
-          f"{emoji} <b>GOLD SIGNAL: {signal}</b>\n"
-          f"Asset: {data['symbol']}\n"
-          f"Bestätigung: <b>{score_text}</b>\n"
-          f"Aktueller Preis: <b>${data['current_price']}</b>\n"
-          f"Einstiegspreis: <b>${data['entry_price']}</b>\n"
-          f"Stop-Loss (SL): <b>{sl_text}</b>\n"
-          f"Take-Profit (TP): <b>{tp_text}</b>\n"
-          f"Zeit: {current_time}"
-      )
-      send_telegram_message(report)
-      save_last_signal(signal)
-    else:
-      print(f"ℹ️ Signal '{signal}' ist bereits aktiv – keine Doppelmeldung.")
-  else:
+  if data is None:
     print("⚠️ Konnte keine Daten abrufen.")
     send_telegram_message(
         "⚠️ Gold-Bot: Warnung – Konnte Marktdaten nicht abrufen."
     )
+    return
 
+  state = load_last_state()
+  last_signal = state["last_signal"]
+  last_price = state["last_price"]
 
-if __name__ == "__main__":
-  main()
+  signal = data["signal"]
+  current_price = data["current_price"]
+
+  sl_text =
