@@ -1,10 +1,10 @@
-name: M15 Gold Bot
+name: 1H Gold Bot
 
 on:
   schedule:
     # Läuft alle 15 Minuten (Minuten 0, 15, 30, 45)
     - cron: "*/15 * * * *"
-  workflow_dispatch: # Erlaubt manuellen Start über den "Run workflow"-Button
+  workflow_dispatch:
 
 jobs:
   run-gold-bot:
@@ -28,4 +28,5 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
         run: python main.py
