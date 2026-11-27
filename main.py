@@ -8,20 +8,12 @@ import yfinance as yf
 # --- ZUGANGSDATEN AUS SICHEREN VARIABLEN LADEN ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATE_FILE = os.path.join(BASE_DIR, "last_signal_state.json")
+STATE_FILE = "last_signal_state.json"
 
 # --- YAHOO FINANCE TICKER ---
-GOLD_TICKER = "GC=F"  # Gold Futures (alternativ XAUUSD=X)
-DXY_TICKER = "DX-Y.NYB"  # US Dollar Index (DXY)
-US10Y_TICKER = "^TNX"  # 10-jährige US-Staatsanleihen Rendite (US10Y)
-
-# --- SIGNAL-EINSTELLUNGEN ---
-# 2 = mindestens 2 aus 3 Faktoren müssen passen (z. B. Gold steigt + DXY fällt)
-# 3 = alle 3 Faktoren müssen gleichzeitig passen (strenger, seltener)
-MIN_CONFIRMATIONS = 2
-PRICE_UPDATE_THRESHOLD = 15.0  # Zusätzliche Meldung bei >= 15 $ Kursänderung
+GOLD_TICKER = "GC=F"        # Gold Futures (alternativ XAUUSD=X)
+DXY_TICKER = "DX-Y.NYB"     # US Dollar Index (DXY)
+US10Y_TICKER = "^TNX"       # 10-jährige US-Staatsanleihen Rendite (US10Y)
 
 
 def send_telegram_message(message_text):
@@ -44,34 +36,22 @@ def send_telegram_message(message_text):
     print(f"❌ Telegram-Fehler: {e}")
 
 
-def load_last_state():
-  """Lädt den zuletzt gespeicherten Signal- und Preisstatus."""
+def load_last_signal():
+  """Lädt das zuletzt gesendete Signal, um doppelte Meldungen zu vermeiden."""
   if os.path.exists(STATE_FILE):
     try:
       with open(STATE_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        return {
-            "last_signal": data.get("last_signal"),
-            "last_price": data.get("last_price"),
-        }
+        return json.load(f).get("last_signal")
     except Exception:
-      return {"last_signal": None, "last_price": None}
-  return {"last_signal": None, "last_price": None}
+      return None
+  return None
 
 
-def save_last_state(signal, price):
-  """Speichert das aktuelle Signal und den letzten Preis."""
+def save_last_signal(signal):
+  """Speichert das aktuelle Signal."""
   try:
     with open(STATE_FILE, "w", encoding="utf-8") as f:
-      json.dump(
-          {
-              "last_signal": signal,
-              "last_price": price,
-              "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-          },
-          f,
-          indent=2,
-      )
+      json.dump({"last_signal": signal}, f)
   except Exception as e:
     print(f"⚠️ Konnte Signal-Status nicht speichern: {e}")
 
@@ -86,189 +66,183 @@ def calculate_atr(df, period=12):
   return true_range.rolling(period).mean()
 
 
-def download_m30_data(ticker, period="10d", interval="30m"):
-  """Lädt M30-Daten für ein Symbol und bereinigt MultiIndex-Spalten."""
+def download_h1_data(ticker, period="30d", interval="1h"):
+  """Lädt H1-Daten für ein Symbol und bereinigt MultiIndex-Spalten."""
   df = yf.download(ticker, period=period, interval=interval, progress=False)
-  if df is None or df.empty:
-    return pd.DataFrame()
   if isinstance(df.columns, pd.MultiIndex):
     df.columns = df.columns.get_level_values(0)
-  df = df.dropna(subset=["Close", "High", "Low"])
   return df
 
 
-def analyze_trend(df):
-  """Analysiert den Trend auf Basis der letzten abgeschlossenen M30-Kerze (iloc[-2])."""
-  if df.empty or len(df) < 26:
+def analyze_direction(df):
+  """Prüft für DXY oder US10Y, ob der Wert im H1-Chart steigt oder fällt."""
+  if df.empty or len(df) < 25:
     return None
 
   df = df.copy()
   df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
 
-  # iloc[-2] = letzte abgeschlossene 30m-Kerze (vermeidet Fehlsignale durch laufende Kerze)
-  close_closed = float(df["Close"].iloc[-2])
-  prev_closed = float(df["Close"].iloc[-3])
-  ema_closed = float(df["EMA_20"].iloc[-2])
-  ema_prev = float(df["EMA_20"].iloc[-3])
+  current_val = float(df["Close"].iloc[-1])
+  prev_val = float(df["Close"].iloc[-2])
+  ema_20 = float(df["EMA_20"].iloc[-1])
+  ema_20_prev = float(df["EMA_20"].iloc[-2])
 
-  if any(pd.isna(x) for x in (close_closed, prev_closed, ema_closed, ema_prev)):
+  if pd.isna(current_val) or pd.isna(prev_val) or pd.isna(ema_20):
     return None
 
-  # Bullisch: Kurs über EMA-20 und (EMA steigt oder Momentum nach oben)
-  bullish = (close_closed > ema_closed) and (
-      ema_closed >= ema_prev or close_closed > prev_closed
+  change_pct = ((current_val - prev_val) / prev_val) * 100
+
+  is_falling = (current_val < prev_val) and (
+      ema_20 < ema_20_prev or current_val < ema_20
   )
-  # Bearisch: Kurs unter EMA-20 und (EMA fällt oder Momentum nach unten)
-  bearish = (close_closed < ema_closed) and (
-      ema_closed <= ema_prev or close_closed < prev_closed
+  is_rising = (current_val > prev_val) and (
+      ema_20 > ema_20_prev or current_val > ema_20
   )
 
+  if is_falling:
+    direction = "FALLEND 🔴"
+  elif is_rising:
+    direction = "STEIGEND 🟢"
+  else:
+    direction = "NEUTRAL 🟡"
+
   return {
-      "bullish": bullish,
-      "bearish": bearish,
-      "close": close_closed,
-      "ema_20": ema_closed,
+      "current": current_val,
+      "prev": prev_val,
+      "change_pct": round(change_pct, 2),
+      "ema_20": ema_20,
+      "is_falling": is_falling,
+      "is_rising": is_rising,
+      "direction": direction,
   }
 
 
-def check_gold_signal():
-  """Ermittelt ein BUY-, SELL- oder NEUTRAL-Signal auf M30 inkl. Preis, SL und TP."""
-  print("🔄 Lade M30-Marktdaten für Gold, DXY und US10Y...")
+def check_macro_gold_setup():
+  """Analysiert DXY und US10Y im H1-Chart und leitet das Gold-Signal ab."""
+  print("🔄 Lade H1-Marktdaten für DXY, US10Y und Gold...")
   try:
-    df_gold = download_m30_data(GOLD_TICKER)
-    df_dxy = download_m30_data(DXY_TICKER)
-    df_us10y = download_m30_data(US10Y_TICKER)
+    df_dxy = download_h1_data(DXY_TICKER)
+    df_us10y = download_h1_data(US10Y_TICKER)
+    df_gold = download_h1_data(GOLD_TICKER)
 
-    gold_trend = analyze_trend(df_gold)
-    dxy_trend = analyze_trend(df_dxy)
-    us10y_trend = analyze_trend(df_us10y)
+    dxy = analyze_direction(df_dxy)
+    us10y = analyze_direction(df_us10y)
 
-    if not gold_trend or not dxy_trend or not us10y_trend:
-      print("⚠️ Zu wenig gültige M30-Daten für Gold, DXY oder US10Y geladen.")
+    if not dxy or not us10y:
+      print("⚠️ Zu wenig Daten für DXY oder US10Y geladen.")
       return None
 
-    df_gold = df_gold.copy()
+    if df_gold.empty or len(df_gold) < 25:
+      print("⚠️ Zu wenig Gold-Daten geladen.")
+      return None
+
     df_gold["ATR"] = calculate_atr(df_gold)
+    gold_price = float(df_gold["Close"].iloc[-1])
+    gold_prev = float(df_gold["Close"].iloc[-2])
+    gold_atr = float(df_gold["ATR"].iloc[-1])
 
-    current_price = float(df_gold["Close"].iloc[-1])
-    gold_atr = float(df_gold["ATR"].iloc[-2])
-
-    if pd.isna(current_price) or pd.isna(gold_atr) or gold_atr <= 0:
-      print("⚠️ Gold-Preis oder M30-ATR ist ungültig.")
+    if pd.isna(gold_price) or pd.isna(gold_atr):
+      print("⚠️ Gold-Preis oder ATR ist NaN.")
       return None
 
-    ts = df_gold.index[-1]
-    price_time = (
-        ts.tz_convert("Europe/Berlin").strftime("%Y-%m-%d %H:%M:%S")
-        if hasattr(ts, "tzinfo") and ts.tzinfo is not None
-        else str(ts)
-    )
-
-    # Für Gold-BUY: Gold steigt (bullish), DXY fällt (bearish), US10Y fällt (bearish)
-    buy_votes = sum([
-        gold_trend["bullish"],
-        dxy_trend["bearish"],
-        us10y_trend["bearish"],
-    ])
-
-    # Für Gold-SELL: Gold fällt (bearish), DXY steigt (bullish), US10Y steigt (bullish)
-    sell_votes = sum([
-        gold_trend["bearish"],
-        dxy_trend["bullish"],
-        us10y_trend["bullish"],
-    ])
-
-    entry_price = current_price
-
-    if buy_votes >= MIN_CONFIRMATIONS and buy_votes > sell_votes:
+    # --- MAKRO-LOGIK: DXY + US10Y ---
+    # Beide fallen -> Rückenwind für Gold -> BUY
+    if dxy["is_falling"] and us10y["is_falling"]:
+      trend = "BULLISCH FÜR GOLD 🟢 (DXY & US10Y fallen)"
       signal = "BUY"
-      stop_loss = round(entry_price - (1.5 * gold_atr), 2)
-      take_profit = round(entry_price + (3.0 * gold_atr), 2)
-    elif sell_votes >= MIN_CONFIRMATIONS and sell_votes > buy_votes:
+      trade_advice = "JA (DXY fällt + US10Y fällt → BUY Signal)"
+      entry_price = gold_price
+      stop_loss = entry_price - (1.5 * gold_atr)
+      take_profit = entry_price + (3.0 * gold_atr)
+
+    # Beide steigen -> Gegenwind für Gold -> SELL
+    elif dxy["is_rising"] and us10y["is_rising"]:
+      trend = "BÄRISCH FÜR GOLD 🔴 (DXY & US10Y steigen)"
       signal = "SELL"
-      stop_loss = round(entry_price + (1.5 * gold_atr), 2)
-      take_profit = round(entry_price - (3.0 * gold_atr), 2)
+      trade_advice = "JA (DXY steigt + US10Y steigt → SELL Signal)"
+      entry_price = gold_price
+      stop_loss = entry_price + (1.5 * gold_atr)
+      take_profit = entry_price - (3.0 * gold_atr)
+
+    # Gemischte Signale -> Abwarten
     else:
+      trend = "GEMISCHT / UNKLAR 🟡"
       signal = "NEUTRAL"
-      stop_loss = None
-      take_profit = None
+      trade_advice = "NEIN (DXY und US10Y laufen nicht gleich)"
+      entry_price = gold_price
+      stop_loss = 0
+      take_profit = 0
 
     return {
-        "symbol": "Gold Futures (GC=F) [M30]",
+        "symbol": "Gold Futures (GC=F)",
+        "timeframe": "H1",
+        "trend": trend,
         "signal": signal,
-        "buy_votes": buy_votes,
-        "sell_votes": sell_votes,
-        "current_price": round(current_price, 2),
-        "entry_price": round(entry_price, 2),
-        "sl": stop_loss,
-        "tp": take_profit,
-        "price_time": price_time,
+        "trade_advice": trade_advice,
+        "gold_price": round(gold_price, 2),
+        "gold_prev": round(gold_prev, 2),
+        "entry": round(entry_price, 2),
+        "sl": round(stop_loss, 2),
+        "tp": round(take_profit, 2),
+        "dxy_val": round(dxy["current"], 2),
+        "dxy_pct": dxy["change_pct"],
+        "dxy_dir": dxy["direction"],
+        "us10y_val": round(us10y["current"], 3),
+        "us10y_pct": us10y["change_pct"],
+        "us10y_dir": us10y["direction"],
     }
   except Exception as e:
-    print(f"❌ Fehler beim Laden/Analysieren der M30-Daten: {e}")
+    print(f"❌ Fehler beim Laden/Analysieren der Daten: {e}")
     return None
 
 
 def main():
   current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-  print(f"\n[{current_time}] Starte M30 Gold-Signal-Prüfung (BUY / SELL / NEUTRAL)...")
+  print(f"\n[{current_time}] Starte H1 Makro-Analyse (DXY + US10Y → Gold)...")
 
-  data = check_gold_signal()
+  data = check_macro_gold_setup()
 
-  if data is None:
+  if data:
+    last_signal = load_last_signal()
+    current_signal = data["signal"]
+
+    print(
+        f"🔍 DXY: {data['dxy_val']} ({data['dxy_dir']}) | "
+        f"US10Y: {data['us10y_val']}% ({data['us10y_dir']}) | "
+        f"Gold: ${data['gold_price']} → Signal: {current_signal}"
+    )
+
+    # Nur senden, wenn BUY oder SELL vorliegt UND sich das Signal geändert hat
+    if current_signal in ("BUY", "SELL") and current_signal != last_signal:
+      report = (
+          f"<b>📊 H1 MAKRO-GOLD SIGNAL: {current_signal} 📊</b>\n"
+          f"-----------------------------------\n"
+          f"• <b>Asset:</b> {data['symbol']} ({data['timeframe']})\n"
+          f"• <b>Signal:</b> {current_signal}\n"
+          f"• <b>Makro-Lage:</b> {data['trend']}\n"
+          f"• <b>Empfehlung:</b> {data['trade_advice']}\n\n"
+          f"💵 <b>DXY:</b> {data['dxy_val']} ({data['dxy_pct']:+}%)"
+          f" [{data['dxy_dir']}]\n"
+          f"📈 <b>US10Y:</b> {data['us10y_val']}% ({data['us10y_pct']:+}%)"
+          f" [{data['us10y_dir']}]\n\n"
+          f"🥇 <b>Gold Preis:</b> ${data['gold_price']} (Vorher:"
+          f" ${data['gold_prev']})\n"
+          f"🎯 <b>Einstiegspreis:</b> ${data['entry']}\n"
+          f"🛑 <b>Stop-Loss (SL):</b> ${data['sl']}\n"
+          f"🎯 <b>Take-Profit (TP):</b> ${data['tp']}\n\n"
+          f"🕒 <b>Zeit:</b> {current_time}"
+      )
+      send_telegram_message(report)
+      save_last_signal(current_signal)
+    elif current_signal == "NEUTRAL":
+      print("ℹ️ DXY & US10Y uneinheitlich – kein BUY/SELL-Signal gesendet.")
+      save_last_signal("NEUTRAL")
+    else:
+      print(f"ℹ️ Signal '{current_signal}' bereits gesendet – keine Doppelmeldung.")
+  else:
     print("⚠️ Konnte keine Daten abrufen.")
     send_telegram_message(
-        "⚠️ Gold-Bot (M30): Warnung – Konnte Marktdaten nicht abrufen."
-    )
-    return
-
-  state = load_last_state()
-  last_signal = state["last_signal"]
-  last_price = state["last_price"]
-
-  signal = data["signal"]
-  current_price = data["current_price"]
-
-  sl_text = f"${data['sl']}" if data["sl"] is not None else "–"
-  tp_text = f"${data['tp']}" if data["tp"] is not None else "–"
-  score_text = f"BUY {data['buy_votes']}/3 | SELL {data['sell_votes']}/3"
-
-  print(
-      f"🔍 Signal: {signal} ({score_text}) | Aktuell: ${current_price} "
-      f"({data['price_time']}) | Einstieg: ${data['entry_price']} | "
-      f"SL: {sl_text} | TP: {tp_text}"
-  )
-
-  price_moved_significantly = (
-      last_price is not None
-      and abs(current_price - float(last_price)) >= PRICE_UPDATE_THRESHOLD
-  )
-
-  if signal != last_signal or price_moved_significantly:
-    emoji_map = {"BUY": "🟢", "SELL": "🔴", "NEUTRAL": "🟡"}
-    emoji = emoji_map.get(signal, "⚪")
-    reason_note = (
-        " (Kursbewegung)"
-        if signal == last_signal and price_moved_significantly
-        else ""
-    )
-
-    report = (
-        f"{emoji} <b>GOLD SIGNAL (M30): {signal}</b>{reason_note}\n"
-        f"Asset: {data['symbol']}\n"
-        f"Bestätigung: <b>{score_text}</b>\n"
-        f"Aktueller Preis: <b>${current_price}</b>\n"
-        f"Einstiegspreis: <b>${data['entry_price']}</b>\n"
-        f"Stop-Loss (SL): <b>{sl_text}</b>\n"
-        f"Take-Profit (TP): <b>{tp_text}</b>\n"
-        f"Kurszeit: {data['price_time']}\n"
-        f"Bot-Zeit: {current_time}"
-    )
-    send_telegram_message(report)
-    save_last_state(signal, current_price)
-  else:
-    print(
-        f"ℹ️ Signal '{signal}' unverändert (${current_price}) – keine Doppelmeldung."
+        "⚠️ H1 Gold-Bot: Warnung - Konnte DXY/US10Y/Gold-Daten nicht abrufen."
     )
 
 
