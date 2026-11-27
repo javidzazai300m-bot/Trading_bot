@@ -1,17 +1,14 @@
-name: Gold H1 Telegram Bot
+name: M15 Gold Bot
 
 on:
   schedule:
-    - cron: "5 * * * *"
-  workflow_dispatch:
-
-permissions:
-  contents: read
+    # Läuft alle 15 Minuten (Minuten 0, 15, 30, 45)
+    - cron: "*/15 * * * *"
+  workflow_dispatch: # Erlaubt manuellen Start über den "Run workflow"-Button
 
 jobs:
   run-gold-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
 
     steps:
       - name: Repository auschecken
@@ -21,15 +18,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
       - name: Abhängigkeiten installieren
         run: |
           python -m pip install --upgrade pip
-          pip install --upgrade yfinance pandas requests
+          pip install pandas requests yfinance
 
-      - name: Gold-Bot ausführen (max. 1 Stunde)
-        timeout-minutes: 60
+      - name: Gold-Bot ausführen
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
