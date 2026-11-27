@@ -15,8 +15,48 @@ def calculate_atr(df: pd.DataFrame, period: int = 12) -> pd.Series:
   return true_range.rolling(period).mean()
 
 
+def fetch_twelvedata_spot(symbol: str = "XAU/USD", interval: str = "1h", outputsize: int = 120):
+  """Lädt Spot-Gold (XAU/USD) über Twelve Data, falls TWELVEDATA_API_KEY gesetzt ist."""
+  api_key = os.getenv("TWELVEDATA_API_KEY")
+  if not api_key:
+    return None, None
+
+  url = "https://api.twelvedata.com/time_series"
+  params = {
+      "symbol": symbol,
+      "interval": interval,
+      "outputsize": outputsize,
+      "apikey": api_key,
+  }
+  try:
+    resp = requests.get(url, params=params, timeout=15)
+    resp.raise_for_status()
+    payload = resp.json()
+    values = payload.get("values")
+    if not values or len(values) < 50:
+      print("Twelve Data lieferte zu wenig Kerzen.")
+      return None, None
+
+    df = pd.DataFrame(values)
+    df["datetime"] = pd.to_datetime(df["datetime"])
+    df = df.sort_values("datetime").set_index("datetime")
+    for col in ["open", "high", "low", "close"]:
+      df[col.capitalize()] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=["High", "Low", "Close"])
+    if len(df) < 50:
+      return None, None
+    return df, "Gold Spot (XAU/USD - TwelveData)"
+  except Exception as e:
+    print(f"Fehler bei Twelve Data: {e}")
+    return None, None
+
+
 def get_gold_data(interval: str = "1h", period: str = "1mo"):
-  """Versucht Spot-Gold (XAUUSD=X) im 1H-Chart und nutzt GC=F als Fallback."""
+  """Versucht zuerst Twelve Data (XAU/USD), dann Yahoo XAUUSD=X und als Fallback GC=F."""
+  td_df, td_label = fetch_twelvedata_spot(symbol="XAU/USD", interval=interval)
+  if td_df is not None:
+    return td_df, td_label
+
   candidates = [
       ("XAUUSD=X", "Gold Spot (XAUUSD=X)"),
       ("GC=F", "Gold Futures Fallback (GC=F)"),
@@ -77,21 +117,21 @@ def check_gold_setup() -> dict | None:
   entry_price = current_price
 
   if current_price > ema_20 and ema_20 > ema_50:
-    trend = "BULLISH (Gruen)"
+    trend = "BULLISH 🟢"
     signal = "BUY (LONG)"
-    trade_advice = "JA (Aufwaertstrend im 1H - Long Einstieg)"
+    trade_advice = "JA (Aufwärtstrend im 1H - Long Einstieg)"
     stop_loss = entry_price - (1.5 * atr)
     take_profit = entry_price + (3.0 * atr)
   elif current_price < ema_20 and ema_20 < ema_50:
-    trend = "BEARISH (Rot)"
+    trend = "BEARISH 🔴"
     signal = "SELL (SHORT)"
-    trade_advice = "JA (Abwaertstrend im 1H - Short Einstieg)"
+    trade_advice = "JA (Abwärtstrend im 1H - Short Einstieg)"
     stop_loss = entry_price + (1.5 * atr)
     take_profit = entry_price - (3.0 * atr)
   else:
-    trend = "NEUTRAL / KORREKTUR (Gelb)"
+    trend = "NEUTRAL / KORREKTUR 🟡"
     signal = "KEIN KLARES SIGNAL (NEUTRAL)"
-    trade_advice = "NEIN (Warten auf klaren Trend / Seitwaertsphase)"
+    trade_advice = "NEIN (Warten auf klaren Trend / Seitwärtsphase)"
     stop_loss = 0.0
     take_profit = 0.0
 
@@ -136,32 +176,32 @@ def format_report(data: dict, current_time: str) -> str:
   """Formatiert den Analysebericht fuer Konsole und Telegram."""
   lines = [
       "",
-      "1H UPDATE: GOLD STATUS",
+      "📊 1H UPDATE: GOLD STATUS 📊",
       "-----------------------------------",
-      f"- Asset: {data['symbol']} ({data['timeframe']})",
-      f"- Signal / Status: {data['signal']}",
-      f"- Trend: {data['trend']}",
-      f"- Empfehlung: {data['trade_advice']}",
+      f"• Asset: {data['symbol']} ({data['timeframe']})",
+      f"• Signal / Status: {data['signal']}",
+      f"• Trend: {data['trend']}",
+      f"• Empfehlung: {data['trade_advice']}",
       "",
-      f"Aktueller Preis: ${data['price']}",
+      f"💵 Aktueller Preis: ${data['price']}",
   ]
 
   if data["sl"] > 0:
     lines.extend([
-        f"Einstiegspreis: ${data['entry']}",
-        f"Stop-Loss (SL): ${data['sl']}",
-        f"Take-Profit (TP): ${data['tp']}",
+        f"🎯 Einstiegspreis: ${data['entry']}",
+        f"🛑 Stop-Loss (SL): ${data['sl']}",
+        f"🎯 Take-Profit (TP): ${data['tp']}",
         "",
     ])
   else:
     lines.extend([
-        f"Einstiegspreis: ${data['entry']} (Kein Trade aktiv)",
+        f"🎯 Einstiegspreis: ${data['entry']} (Kein Trade aktiv)",
         "",
     ])
 
   lines.extend([
-      f"- EMA 20: ${data['ema_20']} | EMA 50: ${data['ema_50']}",
-      f"Zeit: {current_time}",
+      f"• EMA 20: ${data['ema_20']} | EMA 50: ${data['ema_50']}",
+      f"🕒 Zeit: {current_time}",
   ])
   return "\n".join(lines)
 
@@ -179,7 +219,7 @@ def main() -> None:
   else:
     print("Konnte keine Daten abrufen.")
     send_telegram_message(
-        "1H Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
+        "⚠️ 1H Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
     )
 
 
