@@ -15,39 +15,43 @@ def calculate_atr(df: pd.DataFrame, period: int = 12) -> pd.Series:
   return true_range.rolling(period).mean()
 
 
-def get_spot_gold_data(
-    ticker_symbol: str = "XAUUSD=X", interval: str = "15m", period: str = "5d"
-) -> pd.DataFrame | None:
-  """Lädt Spot-Gold-Daten (XAUUSD) über Yahoo Finance."""
-  print(f"Lade Marktdaten fuer {ticker_symbol} ({interval})...")
-  try:
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            " (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        )
-    })
+def get_gold_data(interval: str = "1h", period: str = "1mo"):
+  """Versucht Spot-Gold (XAUUSD=X) im 1H-Chart und nutzt GC=F als Fallback."""
+  candidates = [
+      ("XAUUSD=X", "Gold Spot (XAUUSD=X)"),
+      ("GC=F", "Gold Futures Fallback (GC=F)"),
+  ]
 
-    ticker = yf.Ticker(ticker_symbol, session=session)
-    df = ticker.history(period=period, interval=interval)
+  session = requests.Session()
+  session.headers.update({
+      "User-Agent": (
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          " (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+      )
+  })
 
-    if isinstance(df.columns, pd.MultiIndex):
-      df.columns = df.columns.get_level_values(0)
+  for symbol, label in candidates:
+    print(f"Lade Marktdaten fuer {label} ({interval}, {period})...")
+    try:
+      ticker = yf.Ticker(symbol, session=session)
+      df = ticker.history(period=period, interval=interval)
 
-    if df.empty or len(df) < 50:
-      print(f"Zu wenig Daten geladen (Zeilen: {len(df)})")
-      return None
+      if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
 
-    return df
-  except Exception as e:
-    print(f"Fehler beim Laden der Daten: {e}")
-    return None
+      if not df.empty and len(df) >= 50:
+        return df, label
+
+      print(f"Zu wenig Daten fuer {symbol} (Zeilen: {len(df)}).")
+    except Exception as e:
+      print(f"Fehler bei {symbol}: {e}")
+
+  return None, None
 
 
 def check_gold_setup() -> dict | None:
-  """Analysiert Spot-Gold (XAUUSD) und berechnet Trend, Einstieg, SL und TP."""
-  df = get_spot_gold_data(ticker_symbol="XAUUSD=X", interval="15m", period="5d")
+  """Analysiert Gold auf 1H und berechnet Trend, Einstieg, SL und TP."""
+  df, source_label = get_gold_data(interval="1h", period="1mo")
   if df is None:
     return None
 
@@ -75,13 +79,13 @@ def check_gold_setup() -> dict | None:
   if current_price > ema_20 and ema_20 > ema_50:
     trend = "BULLISH (Gruen)"
     signal = "BUY (LONG)"
-    trade_advice = "JA (Aufwaertstrend im M15 - Long Einstieg)"
+    trade_advice = "JA (Aufwaertstrend im 1H - Long Einstieg)"
     stop_loss = entry_price - (1.5 * atr)
     take_profit = entry_price + (3.0 * atr)
   elif current_price < ema_20 and ema_20 < ema_50:
     trend = "BEARISH (Rot)"
     signal = "SELL (SHORT)"
-    trade_advice = "JA (Abwaertstrend im M15 - Short Einstieg)"
+    trade_advice = "JA (Abwaertstrend im 1H - Short Einstieg)"
     stop_loss = entry_price + (1.5 * atr)
     take_profit = entry_price - (3.0 * atr)
   else:
@@ -92,8 +96,8 @@ def check_gold_setup() -> dict | None:
     take_profit = 0.0
 
   return {
-      "symbol": "Gold Spot (XAUUSD)",
-      "timeframe": "M15",
+      "symbol": source_label,
+      "timeframe": "1H",
       "trend": trend,
       "signal": signal,
       "trade_advice": trade_advice,
@@ -132,7 +136,7 @@ def format_report(data: dict, current_time: str) -> str:
   """Formatiert den Analysebericht fuer Konsole und Telegram."""
   lines = [
       "",
-      "M15 UPDATE: GOLD STATUS",
+      "1H UPDATE: GOLD STATUS",
       "-----------------------------------",
       f"- Asset: {data['symbol']} ({data['timeframe']})",
       f"- Signal / Status: {data['signal']}",
@@ -164,7 +168,7 @@ def format_report(data: dict, current_time: str) -> str:
 
 def main() -> None:
   current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-  print(f"\n[{current_time}] Starte M15 Gold-Analyse...")
+  print(f"\n[{current_time}] Starte 1H Gold-Analyse...")
 
   data = check_gold_setup()
 
@@ -175,7 +179,7 @@ def main() -> None:
   else:
     print("Konnte keine Daten abrufen.")
     send_telegram_message(
-        "M15 Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
+        "1H Gold-Bot: Warnung - Konnte keine Marktdaten abrufen."
     )
 
 
