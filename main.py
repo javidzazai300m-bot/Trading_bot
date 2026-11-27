@@ -4,30 +4,6 @@ import pandas as pd
 import requests
 import yfinance as yf
 
-# --- ZUGANGSDATEN AUS SICHEREN VARIABLEN LADEN ---
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-
-def send_telegram_message(message_text):
-  """Sendet die Nachricht an deinen Telegram-Chat."""
-  if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-    print("❌ Telegram-Token oder Chat-ID nicht gefunden!")
-    return
-
-  url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-  payload = {
-      "chat_id": TELEGRAM_CHAT_ID,
-      "text": message_text,
-      "parse_mode": "Markdown",
-  }
-  try:
-    response = requests.post(url, json=payload, timeout=10)
-    response.raise_for_status()
-    print("✅ Telegram-Nachricht erfolgreich gesendet.")
-  except Exception as e:
-    print(f"❌ Telegram-Fehler: {e}")
-
 
 def calculate_atr(df, period=12):
   """Berechnet die Average True Range (ATR)."""
@@ -47,7 +23,6 @@ def check_gold_setup():
 
   print("🔄 Lade Marktdaten von Yahoo Finance...")
   try:
-    # Erstelle eine Session, die sich als echter Browser ausgibt (verhindert Blockaden)
     session = requests.Session()
     session.headers.update({
         "User-Agent": (
@@ -119,6 +94,29 @@ def check_gold_setup():
     return None
 
 
+def send_telegram_message(message_text):
+  """Sendet die Nachricht an Telegram über Umgebungsvariablen (Secrets)."""
+  token = os.getenv("TELEGRAM_TOKEN")
+  chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
+  if not token or not chat_id:
+    print("ℹ️ Keine Telegram-Secrets gesetzt – Ausgabe nur in der Konsole.")
+    return
+
+  url = f"https://api.telegram.org/bot{token}/sendMessage"
+  payload = {
+      "chat_id": chat_id,
+      "text": message_text,
+      "parse_mode": "Markdown",
+  }
+  try:
+    response = requests.post(url, json=payload, timeout=10)
+    response.raise_for_status()
+    print("✅ Telegram-Nachricht erfolgreich gesendet.")
+  except Exception as e:
+    print(f"❌ Telegram-Fehler: {e}")
+
+
 def main():
   current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
   print(f"\n[{current_time}] Starte M15 Gold-Analyse...")
@@ -126,13 +124,8 @@ def main():
   data = check_gold_setup()
 
   if data:
-    print(
-        f"🔍 Preis: ${data['price']} | Signal: {data['signal']} | Trend:"
-        f" {data['trend']}"
-    )
-
     report = (
-        f"📊 M15 UPDATE: GOLD STATUS 📊\n"
+        f"\n📊 M15 UPDATE: GOLD STATUS 📊\n"
         f"-----------------------------------\n"
         f"• Asset: {data['symbol']} ({data['timeframe']})\n"
         f"• Signal / Status: {data['signal']}\n"
@@ -155,6 +148,7 @@ def main():
         f"🕒 Zeit: {current_time}"
     )
 
+    print(report)
     send_telegram_message(report)
   else:
     print("⚠️ Konnte keine Daten abrufen.")
